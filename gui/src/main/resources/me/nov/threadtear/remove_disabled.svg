@@ -1,9 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-    <defs id="colors">
-        <linearGradient id="menuIconDisabled">
-            <stop offset="0" stop-color="#6E6E6E"/>
-        </linearGradient>
-    </defs>
-    <rect id="frame" width="16" height="16" fill="none"/>
-    <path fill="url(#menuIconDisabled)" fill-rule="evenodd" d="M13 7v2H3V7z"/>
+<!-- Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license. -->
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M1 7.5C1 7.77614 1.22386 8 1.5 8L13.5 8C13.7761 8 14 7.77614 14 7.5C14 7.22386 13.7761 7 13.5 7L1.5 7C1.22386 7 1 7.22386 1 7.5Z" fill="#CED0D6"/>
+    <g transform="translate(8, 9) scale(0.4)">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g clip-path="url(#clip0_2772_38639)">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M10.1464 0.146447C10.3417 -0.0488155 10.6583 -0.0488155 10.8536 0.146447L13 2.29289L15.1464 0.146447C15.3417 -0.0488155 15.6583 -0.0488155 15.8536 0.146447C16.0488 0.341709 16.0488 0.658291 15.8536 0.853553L13.7071 3L15.8536 5.14645C16.0488 5.34171 16.0488 5.65829 15.8536 5.85355C15.6583 6.04882 15.3417 6.04882 15.1464 5.85355L13 3.70711L10.8536 5.85355C10.6583 6.04882 10.3417 6.04882 10.1464 5.85355C9.95118 5.65829 9.95118 5.34171 10.1464 5.14645L12.2929 3L10.1464 0.853553C9.95118 0.658291 9.95118 0.341709 10.1464 0.146447Z" fill="#DB5C5C"/>
+            </g>
+            <defs>
+                <clipPath id="clip0_2772_38639">
+                    <rect width="16" height="16" fill="white"/>
+                </clipPath>
+            </defs>
+        </svg>
+    </g>
 </svg>

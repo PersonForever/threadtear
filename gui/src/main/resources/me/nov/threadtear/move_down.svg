@@ -1,9 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-    <defs id="colors">
-        <linearGradient id="menuIconEnabled">
-            <stop offset="0" stop-color="#AFB1B3"/>
-        </linearGradient>
-    </defs>
-    <rect id="frame" width="16" height="16" fill="none"/>
-    <path fill="url(#menuIconEnabled)" fill-rule="evenodd" d="M8 11l6-6H2z"/>
+<!-- Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license. -->
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M12.5 5.75L8 10.25L3.5 5.75" stroke="#CED0D6" stroke-linecap="round"/>
 </svg>

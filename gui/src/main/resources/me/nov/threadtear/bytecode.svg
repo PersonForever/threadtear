@@ -1,13 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-    <defs id="colors">
-        <linearGradient id="menuIconEnabled">
-            <stop offset="0" stop-color="#AFB1B3"/>
-        </linearGradient>
-    </defs>
-    <rect id="frame" width="16" height="16" fill="none"/>
-    <g fill="url(#menuIconEnabled)" fill-rule="evenodd">
-        <path fill-rule="nonzero"
-              d="M15 7h-3.5c0-1.932-1.568-3.5-3.5-3.5A3.501 3.501 0 0 0 4.5 7c0 1.932 1.568 3.5 3.5 3.5V12c-3.182 0-5.9-2.073-7-5 1.1-2.927 3.818-5 7-5s5.9 2.073 7 5zm-5 0H8v2c-1.107 0-2-.893-2-2s.893-2 2-2 2 .893 2 2z"/>
-        <path d="M9 8h7v8H9V8zm1.5 4v1h4v-1h-4zm0-2v1h4v-1h-4z"/>
-    </g>
+<!-- Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license. -->
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<circle cx="8" cy="8" r="1.5" stroke="#CED0D6"/>
+<path d="M8 11.5C5.62351 11.5 3.2737 9.94494 2.53088 8C3.2737 6.05506 5.62351 4.5 8 4.5C10.3765 4.5 12.7263 6.05506 13.4691 8C12.7263 9.94494 10.3765 11.5 8 11.5Z" stroke="#CED0D6"/>
 </svg>

@@ -109,20 +109,6 @@ public class ConfigurationPanel extends JPanel {
         JOptionPane.showMessageDialog(this, "You have to load a jar file first.");
         return;
       }
-      if (main.listPanel.executionList.getExecutions().size() > 0) {
-        JTextArea ta = new JTextArea();
-        ta.setText("This project is entirely open-source and many hours have went into developing it.\n" +
-          "Please consider donating a small amount, if you are happy with your deobfuscation results.\n" +
-          "Every paid coffee will result in motivation to develop this tool, as it lives of it.\n" +
-          "You can also contact me on twitter (@graxcoding) for more options.\n" +
-          "Thank you.\n\n" +
-          "Bitcoin adress: 3LfBXghKn8KAj74tyetaUdJLic4NpGY3Vr");
-        ta.setCaretPosition(0);
-        ta.setEditable(false);
-        JOptionPane.showMessageDialog(this,
-          ta, "Consider donating",
-          JOptionPane.INFORMATION_MESSAGE, SwingUtils.getIcon("bit_qr.png", 150, 150));
-      }
       JFileChooser jfc = new JFileChooser(inputFile.getParentFile());
       jfc.setAcceptAllFileFilterUsed(false);
       jfc.setSelectedFile(new File(FilenameUtils.removeExtension(inputFile.getAbsolutePath()) + ".jar"));

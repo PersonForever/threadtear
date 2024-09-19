@@ -32,8 +32,8 @@ public class Threadtear extends JFrame {
   public Threadtear() {
     logFrame = new LogFrame();
     this.initBounds();
-    this.setTitle("Threadtear " + CoreUtils.getVersion());
-    this.setIconImage(SwingUtils.iconToFrameImage(SwingUtils.getIcon("threadtear.svg", true), this));
+    this.setTitle("SkidSuite " + CoreUtils.getVersion());
+    this.setIconImage(SwingUtils.iconToFrameImage(SwingUtils.getIcon("skidsuite.svg", true), this));
     this.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
     this.addWindowListener(new ExitListener(this));
     this.initializeFrame();

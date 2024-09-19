@@ -1,14 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-    <defs id="colors">
-        <linearGradient id="menuIconEnabled">
-            <stop offset="0" stop-color="#AFB1B3"/>
-        </linearGradient>
-    </defs>
-    <rect id="frame" width="16" height="16" fill="none"/>
-    <g fill="url(#menuIconEnabled)" fill-rule="evenodd">
-        <path d="M7 5h2v2H7z"/>
-        <path d="M7 9h2v2H7z"/>
-        <path d="M3 12V6H2V4h3l-.008 8z"/>
-        <path d="M11 12V6h-1V4h3l-.008 8z"/>
-    </g>
+<!-- Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license. -->
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M3.346 12V6.096H1.372V4.872H2.488C2.732 4.872 2.946 4.82 3.13 4.716C3.318 4.612 3.462 4.464 3.562 4.272C3.662 4.08 3.712 3.856 3.712 3.6H3.718H4.816V12H3.346ZM7.06909 10.398H8.67109V12H7.06909V10.398ZM7.06909 5.658H8.67109V7.26H7.06909V5.658ZM11.9621 12V6.096H9.98809V4.872H11.1041C11.3481 4.872 11.5621 4.82 11.7461 4.716C11.9341 4.612 12.0781 4.464 12.1781 4.272C12.2781 4.08 12.3281 3.856 12.3281 3.6H12.3341H13.4321V12H11.9621Z" fill="#CED0D6"/>
 </svg>

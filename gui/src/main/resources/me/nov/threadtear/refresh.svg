@@ -1,10 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-    <defs id="colors">
-        <linearGradient id="menuIconEnabled">
-            <stop offset="0" stop-color="#AFB1B3"/>
-        </linearGradient>
-    </defs>
-    <rect id="frame" width="16" height="16" fill="none"/>
-    <path fill="url(#menuIconEnabled)" fill-rule="evenodd"
-          d="M12.365 12.12A6.002 6.002 0 0 1 2.042 8.732l1.854.161a4.202 4.202 0 0 0 7.195 1.95L9.01 8.767h5v5l-1.646-1.647zM3.638 3.882a6.002 6.002 0 0 1 10.303 3.28L12.08 7A4.202 4.202 0 0 0 4.91 5.156l2.083 2.083h-5v-5l1.645 1.644z"/>
+<!-- Copyright 2000-2023 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license. -->
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M2.5 9V8C2.5 4.96243 4.96243 2.5 8 2.5C9.10679 2.5 10.1372 2.82692 11 3.38947" stroke="#CED0D6" stroke-linecap="round"/>
+    <path d="M5 12.6105C5.86278 13.1731 6.89321 13.5 8 13.5C11.0376 13.5 13.5 11.0376 13.5 8V7" stroke="#CED0D6" stroke-linecap="round"/>
+    <path d="M0.49997 7.50027L2.5 9.5L4.49998 7.50023" stroke="#CED0D6" stroke-linecap="round"/>
+    <path d="M11.5 8.49982L13.5 6.5L15.5 8.49982" stroke="#CED0D6" stroke-linecap="round"/>
 </svg>
