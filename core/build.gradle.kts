@@ -18,8 +18,9 @@ dependencies {
     implementation("org.ow2.asm:asm-util")
     implementation("org.ow2.asm:asm-commons")
 
-    implementation("com.github.leibnitz27:cfr:0.151")
+    implementation("com.github.leibnitz27:cfr") { isChanging = true }
+    implementation("org.vineflower:vineflower:1.10.1")
     implementation("ch.qos.logback:logback-classic")
 
-    externalLib("fernflower-15-05-20")
+//    externalLib("fernflower-15-05-20")
 }
