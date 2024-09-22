@@ -5,6 +5,9 @@ import com.github.weisj.darklaf.components.border.DarkBorders;
 
 import com.github.weisj.darklaf.properties.icons.IconLoader;
 import com.github.weisj.darklaf.ui.button.DarkButtonUI;
+import com.github.weisj.jsvg.SVGDocument;
+import com.github.weisj.jsvg.geometry.size.FloatSize;
+import com.github.weisj.jsvg.parser.SVGLoader;
 import me.nov.threadtear.Threadtear;
 import me.nov.threadtear.swing.textarea.DecompilerTextArea;
 import org.fife.ui.rtextarea.RTextScrollPane;
@@ -17,10 +20,13 @@ import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 import java.awt.*;
 import java.awt.event.ActionListener;
+import java.awt.image.BufferedImage;
+import java.net.URL;
+import java.util.function.Consumer;
 
 public class SwingUtils {
 
-  private static final IconLoader ICON_LOADER = IconLoader.get(Threadtear.class);
+  public static SVGLoader loader = new SVGLoader();
 
   public static TitledPanel withTitleAndBorder(String title, JComponent c) {
     Border border = DarkBorders.createLineBorder(1, 1, 1, 1);
@@ -173,20 +179,32 @@ public class SwingUtils {
   }
 
   public static Icon getIcon(String path) {
-    return getIcon(path, false);
+    return getIcon(path, 16, 16, false); // Default size and themed flag
   }
 
   public static Icon getIcon(String path, boolean themed) {
-    return ICON_LOADER.getIcon(path, themed);
+    return getIcon(path, 16, 16, themed); // Default size with themed flag
   }
 
   public static Icon getIcon(String path, int width, int height) {
-    return ICON_LOADER.getIcon(path, width, height, false);
+    return getIcon(path, width, height, false); // Default themed flag
   }
 
   public static Icon getIcon(String path, int width, int height, boolean themed) {
-    return ICON_LOADER.getIcon(path, width, height, themed);
+    URL svgUrl = Threadtear.class.getResource(path);
+    assert svgUrl != null;
+    SVGDocument svgDocument = loader.load(svgUrl);
+    BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+    Graphics2D g = image.createGraphics();
+    assert svgDocument != null;
+    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+    g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+    svgDocument.render(null, g);
+    g.dispose();
+
+    return new ImageIcon(image);
   }
+
 
   public static JButton createSlimButton(Icon icon, ActionListener l) {
     JButton jButton = new JButton(icon);

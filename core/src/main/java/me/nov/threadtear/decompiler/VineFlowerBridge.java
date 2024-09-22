@@ -10,7 +10,7 @@ import org.jetbrains.java.decompiler.main.extern.*;
 
 import me.nov.threadtear.io.JarIO;
 
-public class FernflowerBridge implements IDecompilerBridge, IBytecodeProvider, IResultSaver {
+public class VineFlowerBridge implements IDecompilerBridge, IBytecodeProvider, IResultSaver {
 
   protected static final Map<String, Object> options = new HashMap<>();
 
@@ -68,7 +68,7 @@ public class FernflowerBridge implements IDecompilerBridge, IBytecodeProvider, I
       return sw.toString();
     }
     if (result == null || result.trim().isEmpty()) {
-      result = "No Fernflower output received\n\nOutput log:\n" + new String(log.toByteArray());
+      result = "No VineFlower output received\n\nOutput log:\n" + new String(log.toByteArray());
     }
     return result;
   }
@@ -112,21 +112,21 @@ public class FernflowerBridge implements IDecompilerBridge, IBytecodeProvider, I
   public void closeArchive(String path, String archiveName) {
   }
 
-  public static class FernflowerDecompilerInfo extends DecompilerInfo<FernflowerBridge> {
+  public static class FernflowerDecompilerInfo extends DecompilerInfo<VineFlowerBridge> {
 
     @Override
     public String getName() {
-      return "Fernflower";
+      return "VineFlower";
     }
 
     @Override
     public String getVersionInfo() {
-      return "15-08-20";
+      return "1.10.1";
     }
 
     @Override
-    public FernflowerBridge createDecompilerBridge() {
-      return new FernflowerBridge();
+    public VineFlowerBridge createDecompilerBridge() {
+      return new VineFlowerBridge();
     }
   }
 }

@@ -88,7 +88,7 @@ allprojects {
                     include("**/*.properties")
                     filteringCharset = "UTF-8"
                     // apply native2ascii conversion since Java 8 expects properties to have ascii symbols only
-                    filter(org.apache.tools.ant.filters.EscapeUnicode::class)
+//                    filter(org.apache.tools.ant.filters.EscapeUnicode::class)
                 }
             }
 
@@ -104,12 +104,12 @@ allprojects {
                     header = "<b>Threadtear</b>"
                     addBooleanOption("Xdoclint:none", true)
                     addStringOption("source", "22")
-                    if (JavaVersion.current().isJava9Compatible) {
-                        addBooleanOption("html5", true)
-                        links("https://docs.oracle.com/javase/9/docs/api/")
-                    } else {
-                        links("https://docs.oracle.com/javase/8/docs/api/")
-                    }
+//                    if (JavaVersion.current().isJava9Compatible) {
+//                        addBooleanOption("html5", true)
+//                        links("https://docs.oracle.com/javase/9/docs/api/")
+//                    } else {
+//                        links("https://docs.oracle.com/javase/8/docs/api/")
+//                    }
                 }
             }
 
