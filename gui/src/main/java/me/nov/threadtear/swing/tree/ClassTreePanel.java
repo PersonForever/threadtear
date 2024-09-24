@@ -219,7 +219,7 @@ public class ClassTreePanel extends JPanel implements ILoader {
           // Transform each class before execution
           for (int i = 0; i < classes.size(); i++) {
             try {
-              LogWrapper.logger.debug("CAFEDOOD stripping class: {}", classes.get(i).node.name);
+              LogWrapper.logger.info("CAFEDOOD stripping class: {}", classes.get(i).node.name);
               classes.set(i, transformClazz(classes.get(i)));
             } catch (IOException | software.coley.cafedude.InvalidClassException e) {
               LogWrapper.logger.error("Failed to transform class: {}", classes.get(i).node.name, e);

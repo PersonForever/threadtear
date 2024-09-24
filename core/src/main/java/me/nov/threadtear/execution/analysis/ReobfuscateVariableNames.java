@@ -18,13 +18,14 @@ public class ReobfuscateVariableNames extends Execution {
     super(ExecutionCategory.ANALYSIS, "Reobfuscate variable names",
       "Reobfuscate method local variable names for easier analysis." +
         "<br>" +
-        "Gets rid of default names like a, a2, ... and obfuscated names like 恼人的名字.",
+        "Gets rid of default names like a, a2, ... and obfuscated names like 恼人的名字."+
+        "<br>" + "refactored by neilhuang007",
       ExecutionTag.BETTER_DECOMPILE, ExecutionTag.POSSIBLE_DAMAGE);
   }
 
   @Override
   public String getAuthor() {
-    return "ViRb3";
+    return "neilhuang007";
   }
 
   private int getVariableCount(MethodNode method) {
