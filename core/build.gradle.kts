@@ -21,6 +21,7 @@ dependencies {
     implementation("com.github.leibnitz27:cfr") { isChanging = true }
     implementation("org.vineflower:vineflower:1.10.1")
     implementation("ch.qos.logback:logback-classic")
+    implementation("software.coley:cafedude-core:2.1.1")
 
 //    externalLib("fernflower-15-05-20")
 }

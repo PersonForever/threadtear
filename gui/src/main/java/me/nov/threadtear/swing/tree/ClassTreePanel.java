@@ -17,7 +17,11 @@ import me.nov.threadtear.swing.tree.component.ClassTreeNode;
 import me.nov.threadtear.swing.tree.renderer.ClassTreeCellRenderer;
 import me.nov.threadtear.util.format.Strings;
 import org.apache.commons.io.FilenameUtils;
+import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.ClassNode;
+import software.coley.cafedude.classfile.ClassFile;
+import software.coley.cafedude.io.ClassFileReader;
+import software.coley.cafedude.io.ClassFileWriter;
 
 import javax.swing.*;
 import javax.swing.tree.*;
@@ -26,6 +30,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.io.IOException;
+import java.io.InvalidClassException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -211,6 +216,15 @@ public class ClassTreePanel extends JPanel implements ILoader {
       switch (type) {
         case "jar":
           this.classes = JarIO.loadClasses(inputFile);
+          // Transform each class before execution
+          for (int i = 0; i < classes.size(); i++) {
+            try {
+              LogWrapper.logger.debug("CAFEDOOD stripping class: {}", classes.get(i).node.name);
+              classes.set(i, transformClazz(classes.get(i)));
+            } catch (IOException | software.coley.cafedude.InvalidClassException e) {
+              LogWrapper.logger.error("Failed to transform class: {}", classes.get(i).node.name, e);
+            }
+          }
           if (classes.stream().anyMatch(c -> c.oldEntry.getCertificates() != null)) {
             JOptionPane.showMessageDialog(this,
               "<html>Warning: File is signed and may not load correctly if already " +
@@ -292,4 +306,24 @@ public class ClassTreePanel extends JPanel implements ILoader {
     current.add(newChild);
     addToTree(newChild, c, packages, ++pckg);
   }
+
+  public static Clazz transformClazz(Clazz originalClazz) throws IOException, InvalidClassException, software.coley.cafedude.InvalidClassException {
+    // Read the original bytecode
+    byte[] originalBytecode = originalClazz.streamOriginal().readAllBytes();
+
+    // Use Cafedude to strip attributes
+    ClassFileReader reader = new ClassFileReader();
+    ClassFile classFile = reader.read(originalBytecode);
+    byte[] strippedBytecode = new ClassFileWriter().write(classFile);
+
+    // Create a new ClassNode from the stripped bytecode
+    ClassReader classReader = new ClassReader(strippedBytecode);
+    ClassNode newNode = new ClassNode();
+    classReader.accept(newNode, 0);
+
+    // Return a new Clazz object
+    return new Clazz(newNode, originalClazz.oldEntry, originalClazz.inputFile);
+  }
+
+
 }

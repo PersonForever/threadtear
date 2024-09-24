@@ -18,6 +18,7 @@ dependencies {
 
     implementation("commons-io:commons-io")
     implementation("org.apache.commons:commons-configuration2")
+    implementation("software.coley:cafedude-core:2.1.1")
 }
 
 tasks.shadowJar {

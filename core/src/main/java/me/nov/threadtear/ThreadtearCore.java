@@ -4,8 +4,15 @@ import me.nov.threadtear.execution.Clazz;
 import me.nov.threadtear.execution.Execution;
 import me.nov.threadtear.logging.LogWrapper;
 import me.nov.threadtear.security.VMSecurityManager;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.tree.ClassNode;
 import org.slf4j.LoggerFactory;
+import software.coley.cafedude.InvalidClassException;
+import software.coley.cafedude.classfile.ClassFile;
+import software.coley.cafedude.io.ClassFileReader;
+import software.coley.cafedude.io.ClassFileWriter;
 
+import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
 import java.lang.reflect.Field;
@@ -16,15 +23,6 @@ import java.util.stream.Collectors;
 
 public class ThreadtearCore {
 
-  // removed due to being unused
-  /*
-  public static void configureEnvironment() throws Exception {
-    System.setProperty("file.encoding", "UTF-8");
-    Field charset = Charset.class.getDeclaredField("defaultCharset");
-    charset.setAccessible(true);
-    charset.set(null, null);
-  }
-*/
   public static void configureLoggers() {
     LogWrapper.logger.addLogger(LoggerFactory.getLogger("logfile"));
     LogWrapper.logger.addLogger(LoggerFactory.getLogger("form"));
@@ -35,13 +33,14 @@ public class ThreadtearCore {
     LogWrapper.logger.info("Executing {} tasks on {} classes!", executions.size(), classes.size());
     if (!disableSecurity) {
       LogWrapper.logger.info("Initializing security manager if something goes horribly wrong");
-      System.setSecurityManager(new VMSecurityManager());
     } else {
       LogWrapper.logger.warning("Starting without security manager!");
     }
     List<Clazz> ignoredClasses = classes.stream().filter(c -> !c.transform).collect(Collectors.toList());
     LogWrapper.logger.warning("{} classes will be ignored", ignoredClasses.size());
     classes.removeIf(c -> !c.transform);
+
+
     Map<String, Clazz> map = classes.stream().collect(Collectors.toMap(c -> c.node.name, c -> c, (c1, c2) -> {
       LogWrapper.logger.warning("Warning: Duplicate class definition of {}, one class may not get decrypted", c1.node.name);
       return c1;
@@ -73,7 +72,6 @@ public class ThreadtearCore {
     } catch (InterruptedException e1) {
     }
     LogWrapper.logger.info("Successful completion!");
-    System.setSecurityManager(null);
   }
 
   // TODO: make a CLI
