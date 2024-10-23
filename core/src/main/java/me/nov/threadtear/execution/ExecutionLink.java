@@ -1,28 +1,6 @@
 package me.nov.threadtear.execution;
 
-import me.nov.threadtear.execution.allatori.ExpirationDateRemoverAllatori;
-import me.nov.threadtear.execution.allatori.JunkRemoverAllatori;
-import me.nov.threadtear.execution.allatori.StringObfuscationAllatori;
-import me.nov.threadtear.execution.analysis.*;
-import me.nov.threadtear.execution.cleanup.InlineMethods;
-import me.nov.threadtear.execution.cleanup.InlineUnchangedFields;
-import me.nov.threadtear.execution.cleanup.remove.RemoveAttributes;
-import me.nov.threadtear.execution.cleanup.remove.RemoveUnnecessary;
-import me.nov.threadtear.execution.cleanup.remove.RemoveUnusedVariables;
-import me.nov.threadtear.execution.dasho.StringObfuscationDashO;
-import me.nov.threadtear.execution.generic.ConvertCompareInstructions;
-import me.nov.threadtear.execution.generic.KnownConditionalJumps;
-import me.nov.threadtear.execution.generic.ObfuscatedAccess;
-import me.nov.threadtear.execution.generic.TryCatchObfuscationRemover;
-import me.nov.threadtear.execution.generic.inliner.ArgumentInliner;
-import me.nov.threadtear.execution.generic.inliner.JSRInliner;
-import me.nov.threadtear.execution.paramorphism.AccessObfuscationParamorphism;
-import me.nov.threadtear.execution.paramorphism.BadAttributeRemover;
-import me.nov.threadtear.execution.paramorphism.StringObfuscationParamorphism;
-import me.nov.threadtear.execution.stringer.AccessObfuscationStringer;
-import me.nov.threadtear.execution.stringer.StringObfuscationStringer;
-import me.nov.threadtear.execution.tools.*;
-import me.nov.threadtear.execution.zkm.*;
+
 import me.nov.threadtear.logging.LogWrapper;
 import me.nov.threadtear.util.reflection.ReflectionUtil;
 

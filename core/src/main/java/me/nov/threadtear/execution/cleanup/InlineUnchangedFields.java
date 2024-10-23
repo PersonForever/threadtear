@@ -52,6 +52,7 @@ public class InlineUnchangedFields extends Execution {
           if (isGetReferenceTo(cn, fin, fn)) {
             m.instructions.set(ain, Instructions.makeNullPush(Type.getType(fn.desc)));
             inlines++;
+            logger.debug("Inlined field {} in method {} in class {}", fn.name, m.name, c.name);
           }
         }
       }
