@@ -8,9 +8,15 @@ import java.util.zip.ZipException;
 
 import me.nov.threadtear.logging.LogWrapper;
 import org.apache.commons.io.IOUtils;
+import org.benf.cfr.reader.bytecode.analysis.opgraph.op4rewriters.IllegalGenericRewriter;
+import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.ClassNode;
 
 import me.nov.threadtear.execution.Clazz;
+import software.coley.cafedude.classfile.ClassFile;
+import software.coley.cafedude.io.ClassFileReader;
+import software.coley.cafedude.io.ClassFileWriter;
+import software.coley.cafedude.transform.IllegalStrippingTransformer;
 
 public final class JarIO {
   private JarIO() {
@@ -25,15 +31,35 @@ public final class JarIO {
     return classes;
   }
 
+  public static byte[] transformClazz(byte[] bytes) throws software.coley.cafedude.InvalidClassException {
+
+    // Use Cafedude to strip attributes
+    ClassFileReader reader = new ClassFileReader();
+    ClassFile classFile = reader.read(bytes);
+    // Modifies the 'cf' instance
+    new IllegalStrippingTransformer(classFile).transform();
+    byte[] strippedBytecode = new ClassFileWriter().write(classFile);
+
+    // Return a new Clazz object
+    return strippedBytecode;
+  }
+
   private static ArrayList<Clazz> readEntry(JarFile jar, JarEntry en, ArrayList<Clazz> classes) {
     String name = en.getName();
     try (InputStream jis = jar.getInputStream(en)) {
-      byte[] bytes = IOUtils.toByteArray(jis);
+      byte[] bytes = (IOUtils.toByteArray(jis));
       if (isClassFile(bytes)) {
         try {
-          final ClassNode cn = Conversion.toNode(bytes);
+          final ClassNode cn = Conversion.toNode(transformClazz(bytes));
+
           if (cn != null && (cn.superName != null || (cn.name != null && cn.name.equals("java/lang/Object")))) {
-            classes.add(new Clazz(cn, en, jar));
+            // transform using cafedood
+            try{
+              classes.add(new Clazz(cn, en, jar));
+            }catch (Exception e){
+              LogWrapper.logger.error("Failed to transform class {}", e, name);
+            }
+
           }
         } catch (Exception e) {
           LogWrapper.logger.error("Failed to load file {}", e, name);

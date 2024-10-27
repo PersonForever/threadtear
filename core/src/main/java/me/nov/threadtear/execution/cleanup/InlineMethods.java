@@ -28,10 +28,7 @@ public class InlineMethods extends Execution {
     inlines = 0;
     classes.values().stream().map(c -> c.node.methods).flatMap(List::stream)
       .forEach(m -> m.instructions.forEach(ain -> {
-        if (ain.getOpcode() == INVOKESTATIC) { //
-          // can't inline invokevirtual / special
-          // as object could only be superclass and
-          // real overrides
+        if (ain.getOpcode() == INVOKESTATIC || ain.getOpcode() == INVOKEVIRTUAL || ain.getOpcode() == INVOKESPECIAL) {
           MethodInsnNode min = (MethodInsnNode) ain;
           String key = min.owner + "." + min.name + min.desc;
           if (map.containsKey(key)) {
@@ -43,10 +40,6 @@ public class InlineMethods extends Execution {
         }
       }));
 
-    // map.forEach((key, method) -> classes.get(key
-    // .substring(0, key.lastIndexOf('.'))).node.methods
-    // .removeIf(m -> m.equals(method) && !Access
-    // .isPublic(method.access)));
     map.forEach((key, method) -> classes.get(key.substring(0, key.lastIndexOf('.'))).node.methods.remove(method));
     logger.info("Inlined {} method references!", inlines);
     return true;
@@ -57,16 +50,19 @@ public class InlineMethods extends Execution {
     StreamSupport.stream(copy.spliterator(), false)
       .filter(ain -> ain.getType() == AbstractInsnNode.LINE || ain.getType() == AbstractInsnNode.FRAME)
       .forEach(copy::remove);
-    removeReturn(copy);
+    removeReturn(copy, method);
 
     InsnList fakeVarList = createFakeVarList(method);
     copy.insert(fakeVarList);
 
+    if (min.getOpcode() != INVOKESTATIC) {
+      // Handle 'this' reference for non-static methods
+      copy.insert(new VarInsnNode(ALOAD, 0)); // Load 'this'
+    }
+
     StreamSupport.stream(copy.spliterator(), false).filter(ain -> ain.getType() == AbstractInsnNode.VAR_INSN)
-      .map(ain -> (VarInsnNode) ain).forEach(v -> v.var += m.maxLocals + 4); //
-    // offset local
-    // variables to not
-    // collide with existing ones
+      .map(ain -> (VarInsnNode) ain).forEach(v -> v.var += m.maxLocals + 4);
+
     m.instructions.insert(min, copy);
     m.instructions.remove(min);
   }
@@ -131,7 +127,7 @@ public class InlineMethods extends Execution {
     return map;
   }
 
-  private void removeReturn(InsnList copy) {
+  private void removeReturn(InsnList copy, MethodNode m) {
     int i = copy.size() - 1;
     while (i >= 0) {
       AbstractInsnNode ain = copy.get(i);
@@ -150,22 +146,24 @@ public class InlineMethods extends Execution {
         case LRETURN:
           return;
         default:
+          // Continue removing until a proper return statement is found
+          break;
       }
       i--;
     }
-    throw new RuntimeException("no return found to remove, invalid method?");
+    // then skip this method and log the exception instead of throwing it
+    logger.error("No return found to remove, invalid method?, method name: {}", m);
+
   }
 
   public boolean isUnnecessary(MethodNode m) {
-    if (!Access.isStatic(m.access)) {
-      return false;
-    } else if (m.instructions.size() > 32) {
-      // do not inline huge methods
-      return false;
-    } else if (m.instructions.size() < 2) {
-      // abstract methods or similar
-      return false;
-    }
+//    if (m.instructions.size() > 32) {
+//      // do not inline huge methods
+//      return false;
+//    } else if (m.instructions.size() < 2) {
+//      // abstract methods or similar
+//      return false;
+//    }
     return StreamSupport.stream(m.instructions.spliterator(), false).noneMatch(this::isInvocationOrJump);
   }
 
