@@ -333,4 +333,86 @@ public final class Instructions implements Opcodes {
     list.add(ain);
     return list;
   }
+
+  /**
+   * Converts a ClassNode back into a byte array.
+   * This uses ASM's ClassWriter and the accept() method on ClassNode.
+   */
+  public static byte[] toByteArray(ClassNode cn) {
+    ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
+    cn.accept(cw);
+    return cw.toByteArray();
+  }
+
+  /**
+   * Creates instructions to push a given constant value onto the stack, based on its type.
+   * If value is null, or not compatible, it falls back to makeNullPush().
+   */
+  public static AbstractInsnNode makeConstantPush(Object value, Type type) {
+    if (value == null) {
+      return makeNullPush(type);
+    }
+
+    switch (type.getSort()) {
+      case Type.BOOLEAN:
+      case Type.BYTE:
+      case Type.SHORT:
+      case Type.INT:
+        // Expect value to be a number
+        int intVal = ((Number) value).intValue();
+        return pushInt(intVal);
+
+      case Type.LONG:
+        long longVal = ((Number) value).longValue();
+        if (longVal == 0L) return new InsnNode(LCONST_0);
+        if (longVal == 1L) return new InsnNode(LCONST_1);
+        return new LdcInsnNode(longVal);
+
+      case Type.FLOAT:
+        float floatVal = ((Number) value).floatValue();
+        if (floatVal == 0.0f) return new InsnNode(FCONST_0);
+        if (floatVal == 1.0f) return new InsnNode(FCONST_1);
+        if (floatVal == 2.0f) return new InsnNode(FCONST_2);
+        return new LdcInsnNode(floatVal);
+
+      case Type.DOUBLE:
+        double doubleVal = ((Number) value).doubleValue();
+        if (doubleVal == 0.0d) return new InsnNode(DCONST_0);
+        if (doubleVal == 1.0d) return new InsnNode(DCONST_1);
+        return new LdcInsnNode(doubleVal);
+
+      case Type.OBJECT:
+      case Type.ARRAY:
+        // For objects (including String) just LDC them
+        return new LdcInsnNode(value);
+
+      default:
+        // If we can't handle this type, fallback to null/zero
+        return makeNullPush(type);
+    }
+  }
+
+  /**
+   * Helper method to push an int value efficiently.
+   */
+  private static AbstractInsnNode pushInt(int val) {
+    switch (val) {
+      case -1: return new InsnNode(ICONST_M1);
+      case 0:  return new InsnNode(ICONST_0);
+      case 1:  return new InsnNode(ICONST_1);
+      case 2:  return new InsnNode(ICONST_2);
+      case 3:  return new InsnNode(ICONST_3);
+      case 4:  return new InsnNode(ICONST_4);
+      case 5:  return new InsnNode(ICONST_5);
+      default:
+        // For larger integers, use BIPUSH/SIPUSH or LDC
+        if (val >= Byte.MIN_VALUE && val <= Byte.MAX_VALUE) {
+          return new IntInsnNode(BIPUSH, val);
+        } else if (val >= Short.MIN_VALUE && val <= Short.MAX_VALUE) {
+          return new IntInsnNode(SIPUSH, val);
+        } else {
+          return new LdcInsnNode(val);
+        }
+    }
+  }
 }

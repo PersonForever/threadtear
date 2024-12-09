@@ -13,7 +13,6 @@ import com.github.weisj.darklaf.components.OverlayScrollPane;
 import com.github.weisj.darklaf.components.border.DarkBorders;
 import me.nov.threadtear.execution.Execution;
 import me.nov.threadtear.execution.ExecutionLink;
-import me.nov.threadtear.execution.allatori.*;
 import me.nov.threadtear.execution.analysis.*;
 import me.nov.threadtear.execution.cleanup.*;
 import me.nov.threadtear.execution.cleanup.remove.RemoveAttributes;
