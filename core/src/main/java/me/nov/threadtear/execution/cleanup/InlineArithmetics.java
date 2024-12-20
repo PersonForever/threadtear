@@ -11,7 +11,7 @@ public class InlineArithmetics extends Execution {
 
   public InlineArithmetics() {
     super(ExecutionCategory.CLEANING, "Inline arithmetics",
-        "Inline simple arithmetics that only return or throw.<br>Can be useful for deobfuscating arithmetic obfuscation.",
+        "Inline arithmetic calculations.<br>Can be useful for deobfuscating arithmetic obfuscation used in flow.",
         ExecutionTag.SHRINK, ExecutionTag.RUNNABLE);
   }
 

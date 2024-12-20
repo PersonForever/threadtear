@@ -13,7 +13,18 @@ import java.util.stream.StreamSupport;
 
 import static org.objectweb.asm.Opcodes.*;
 
-
+/**
+ * This execution inlines static fields that:
+ * 1. Are assigned only once in <clinit>.
+ * 2. Are never reassigned outside <clinit>.
+ * 3. Have a known value after <clinit> finishes running.
+ *
+ * Approach:
+ * - Load all classes into a custom ClassLoader.
+ * - This triggers <clinit> for each class.
+ * - After that, reflect on the class to get the runtime values of the static fields.
+ * - If a field is never reassigned after <clinit>, we treat its runtime value as a constant.
+ */
 public class InlineUnchangedFields extends Execution {
 
   private Map<String, Clazz> classes;
@@ -55,8 +66,13 @@ public class InlineUnchangedFields extends Execution {
       mergeClinitMethods(clazz.node);
     }
 
-    // Load all classes using a custom ClassLoader
-    ReflectiveClassLoader loader = new ReflectiveClassLoader(getClass().getClassLoader());
+    // Build the classes map
+    Map<String, byte[]> classesMap = buildClassesMap(this.classes);
+
+    // Instantiate the custom class loader with the classes map
+    ReflectiveClassLoader loader = new ReflectiveClassLoader(getClass().getClassLoader(), classesMap);
+
+    // Define all classes using the custom class loader
     Map<String, Class<?>> loadedClasses = defineAllClasses(loader, this.classes);
 
     // Determine which fields can be considered constant
@@ -68,20 +84,14 @@ public class InlineUnchangedFields extends Execution {
     }
 
     // Inline all references to these constant fields
-    try{
-      inlineAllConstantFields();
-    } catch (Exception e) {
-      logger.error("Error inlining constant fields: {}", e.getMessage());
-      return false;
-    }
-
+    inlineAllConstantFields();
 
     logger.info("Inlined {} field references!", inlinedCount);
     return inlinedCount > 0;
   }
 
   /**
-   * Merge multiple <clinit> methods into a single one if found.
+   * Merges multiple <clinit> methods into a single one if found.
    * Java normally allows only one <clinit>, but in manipulated bytecode,
    * there might be multiple. We combine them for easier analysis.
    */
@@ -162,7 +172,7 @@ public class InlineUnchangedFields extends Execution {
   }
 
   /**
-   * Find a suitable point in the primary method to insert extra <clinit> instructions.
+   * Finds a suitable point in the primary method to insert extra <clinit> instructions.
    * We prefer to insert before the RETURN instruction if found, else insert at the end.
    */
   private AbstractInsnNode findMethodReturnOrEnd(MethodNode m) {
@@ -176,18 +186,46 @@ public class InlineUnchangedFields extends Execution {
     return m.instructions.getLast();
   }
 
+  /**
+   * Builds a map of internal class names to their byte arrays.
+   *
+   * @param classes The map of class names to Clazz instances.
+   * @return A map of internal class names to byte arrays.
+   */
+  private Map<String, byte[]> buildClassesMap(Map<String, Clazz> classes) {
+    Map<String, byte[]> classBytesMap = new HashMap<>();
+    for (Map.Entry<String, Clazz> e : classes.entrySet()) {
+      String internalName = e.getKey(); // e.g., "com/example/MyClass"
+      ClassNode cn = e.getValue().node;
+      byte[] classBytes = Instructions.toByteArray(cn);
+      classBytesMap.put(internalName, classBytes);
+    }
+    return classBytesMap;
+  }
+
+  /**
+   * Defines all classes into the provided ClassLoader.
+   * Once defined, <clinit> will have run, so we can reflect on their static fields.
+   */
   private Map<String, Class<?>> defineAllClasses(ReflectiveClassLoader loader, Map<String, Clazz> classes) {
     Map<String, Class<?>> result = new HashMap<>();
     for (Map.Entry<String, Clazz> e : classes.entrySet()) {
-      String className = e.getKey();
-      ClassNode cn = e.getValue().node;
-      byte[] classBytes = Instructions.toByteArray(cn);
-      Class<?> definedClass = loader.define(className.replace('/', '.'), classBytes);
-      result.put(className, definedClass);
+      String internalName = e.getKey(); // e.g., "com/example/MyClass"
+      String className = internalName.replace('/', '.'); // e.g., "com.example.MyClass"
+      try {
+        Class<?> definedClass = loader.loadClass(className);
+        result.put(internalName, definedClass);
+      } catch (ClassNotFoundException ex) {
+        logger.error("Failed to load class: {}", className, ex);
+      }
     }
     return result;
   }
 
+  /**
+   * Analyze a single class to determine which static fields can be considered constant.
+   * If a static field is never reassigned outside <clinit>, we read its value via reflection.
+   */
   private void analyzeClinitForConstants(ClassNode cn, Map<String, Class<?>> loadedClasses) {
     MethodNode clinit = null;
     for (MethodNode m : cn.methods) {
@@ -229,6 +267,9 @@ public class InlineUnchangedFields extends Execution {
     }
   }
 
+  /**
+   * Inline references to all fields determined to be constant.
+   */
   private void inlineAllConstantFields() {
     for (Clazz c : classes.values()) {
       ClassNode cn = c.node;
@@ -241,7 +282,7 @@ public class InlineUnchangedFields extends Execution {
             if (ain.getType() == AbstractInsnNode.FIELD_INSN) {
               FieldInsnNode fin = (FieldInsnNode) ain;
               String key = fin.name + fin.desc;
-              if (fieldMap.containsKey(key) && (fin.getOpcode() == GETSTATIC)) {
+              if (fieldMap.containsKey(key) && fin.getOpcode() == GETSTATIC) {
                 toReplace.add(ain);
               }
             }
@@ -280,15 +321,28 @@ public class InlineUnchangedFields extends Execution {
     return false;
   }
 
+  /**
+   * A custom ClassLoader that allows us to define classes from byte arrays.
+   * It holds a map of class names to byte arrays to resolve dependencies.
+   *
+   * Note: This class trusts the input. Real usage should consider security.
+   */
   public static class ReflectiveClassLoader extends SecureClassLoader {
-    public ReflectiveClassLoader(ClassLoader parent) {
+    private final Map<String, byte[]> classesMap;
+
+    public ReflectiveClassLoader(ClassLoader parent, Map<String, byte[]> classesMap) {
       super(parent);
+      this.classesMap = classesMap;
     }
 
-    public Class<?> define(String name, byte[] b) {
-      Class<?> c = defineClass(name, b, 0, b.length);
-      resolveClass(c);
-      return c;
+    @Override
+    protected Class<?> findClass(String name) throws ClassNotFoundException {
+      String internalName = name.replace('.', '/');
+      byte[] classBytes = classesMap.get(internalName);
+      if (classBytes != null) {
+        return defineClass(name, classBytes, 0, classBytes.length);
+      }
+      return super.findClass(name); // Delegate to parent if not found in map
     }
   }
 }
