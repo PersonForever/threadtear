@@ -22,6 +22,8 @@ dependencies {
 }
 
 tasks.shadowJar {
+    val serviceEntries: Any? = null  // No annotation needed here
+
     archiveBaseName.set(project.name)
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
     manifest {
@@ -35,15 +37,6 @@ tasks.shadowJar {
     transform(LicenseTransformer::class.java) {
         destinationPath = "META-INF/licenses/NOTICES.txt"
         include("META-INF/NOTICE", "META-INF/NOTICE.txt")
-    }
-    relocate("META-INF", "META-INF/licenses") {
-        includes.addAll(listOf(
-            "META-INF/*LICENSE*",
-            "META-INF/*NOTICE*",
-            "META-INF/AL2.0",
-            "META-INF/LGPL2.1"
-        ))
-        exclude("META-INF/THREADTEAR_LICENSE")
     }
 }
 
