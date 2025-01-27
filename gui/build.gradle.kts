@@ -75,5 +75,5 @@ val runGui by tasks.registering(JavaExec::class) {
     workingDir = File(project.rootDir, "dist")
     workingDir.mkdir()
     main = "me.nov.threadtear.Threadtear"
-    classpath("$rootDir/dist/threadtear-${project.version}.jar")
+    classpath = files("$rootDir/dist/threadtear-${project.version}.jar")
 }
