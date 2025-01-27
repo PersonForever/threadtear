@@ -38,6 +38,15 @@ tasks.shadowJar {
         destinationPath = "META-INF/licenses/NOTICES.txt"
         include("META-INF/NOTICE", "META-INF/NOTICE.txt")
     }
+    //relocate("META-INF", "META-INF/licenses") {
+    //    includes.addAll(listOf(
+    //        "META-INF/*LICENSE*",
+    //        "META-INF/*NOTICE*",
+    //        "META-INF/AL2.0",
+    //        "META-INF/LGPL2.1"
+    //    ))
+    //    exclude("META-INF/THREADTEAR_LICENSE")
+    //}
 }
 
 tasks.clean {
