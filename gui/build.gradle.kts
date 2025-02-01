@@ -22,6 +22,8 @@ dependencies {
 }
 
 tasks.shadowJar {
+    val serviceEntries: Any? = null  // No annotation needed here
+
     archiveBaseName.set(project.name)
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
     manifest {
@@ -36,15 +38,15 @@ tasks.shadowJar {
         destinationPath = "META-INF/licenses/NOTICES.txt"
         include("META-INF/NOTICE", "META-INF/NOTICE.txt")
     }
-    relocate("META-INF", "META-INF/licenses") {
-        includes.addAll(listOf(
-            "META-INF/*LICENSE*",
-            "META-INF/*NOTICE*",
-            "META-INF/AL2.0",
-            "META-INF/LGPL2.1"
-        ))
-        exclude("META-INF/THREADTEAR_LICENSE")
-    }
+    //relocate("META-INF", "META-INF/licenses") {
+    //    includes.addAll(listOf(
+    //        "META-INF/*LICENSE*",
+    //        "META-INF/*NOTICE*",
+    //        "META-INF/AL2.0",
+    //        "META-INF/LGPL2.1"
+    //    ))
+    //    exclude("META-INF/THREADTEAR_LICENSE")
+    //}
 }
 
 tasks.clean {
@@ -75,5 +77,5 @@ val runGui by tasks.registering(JavaExec::class) {
     workingDir = File(project.rootDir, "dist")
     workingDir.mkdir()
     main = "me.nov.threadtear.Threadtear"
-    classpath("$rootDir/dist/threadtear-${project.version}.jar")
+    classpath = files("$rootDir/dist/threadtear-${project.version}.jar")
 }

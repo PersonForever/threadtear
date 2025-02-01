@@ -62,8 +62,8 @@ allprojects {
 
     plugins.withType<JavaPlugin> {
         configure<JavaPluginExtension> {
-            sourceCompatibility = JavaVersion.toVersion(22)
-            targetCompatibility = JavaVersion.toVersion(22)
+            sourceCompatibility = JavaVersion.toVersion(19)
+            targetCompatibility = JavaVersion.toVersion(19)
         }
 
         if (!skipAutostyle) {
