@@ -33,502 +33,822 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-public class DESObfuscationZKM extends Execution implements IVMReferenceHandler, IConstantReferenceHandler {
-  private static final String ZKM_INVOKEDYNAMIC_HANDLE_DESC = "(Ljava/lang/invoke/MethodHandles$Lookup;" +
-    "Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;";
-  private static final String ZKM_STRING_INVOKEDYNAMIC_DESC = "\\([IJ]+\\)Ljava/lang/String;";
-  private static final String ZKM_INVOKEDYNAMIC_REAL_BOOTSTRAP_DESC_REGEX = "\\(Ljava/lang/invoke/MethodHandles" +
-    "\\$Lookup;Ljava/lang/invoke/MutableCallSite;Ljava/lang/String;Ljava/lang/invoke/MethodType;[JI]+\\)" +
-    "Ljava/lang/invoke/MethodHandle;";
-  private static final String ZKM_REFERENCE_DESC_REGEX = "\\((?:L.*;)?J+\\)(?:\\[?(?:I|J|(?:L.*;)))";
+import static org.objectweb.asm.Opcodes.*;
 
-  private boolean verbose;
-  private int strings, encryptedStrings;
-  private int references, encryptedReferences;
-  private Map<String, Clazz> classes;
+public class DESObfuscationZKM extends Execution implements IVMReferenceHandler, IConstantReferenceHandler
+{
+    private static final String ZKM_INVOKEDYNAMIC_HANDLE_DESC = "(Ljava/lang/invoke/MethodHandles$Lookup;" +
+            "Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;";
+    private static final String ZKM_STRING_INVOKEDYNAMIC_DESC = "\\([IJ]+\\)Ljava/lang/String;";
+    private static final String ZKM_INVOKEDYNAMIC_REAL_BOOTSTRAP_DESC_REGEX = "\\(Ljava/lang/invoke/MethodHandles" +
+            "\\$Lookup;Ljava/lang/invoke/MutableCallSite;Ljava/lang/String;Ljava/lang/invoke/MethodType;[JI]+\\)" +
+            "Ljava/lang/invoke/MethodHandle;";
+    private static final String ZKM_REFERENCE_DESC_REGEX = "\\((?:L.*;)?J+\\)(?:\\[?(?:I|J|(?:L.*;)))";
 
-  public DESObfuscationZKM() {
-    super(ExecutionCategory.ZKM, "ZKM DES case deobfuscator (WIP, unstable)",
-      "Deobfuscates string / access obfuscation with DES cipher." +
-        "<br>Tested on ZKM 14, could work on newer versions too.", ExecutionTag.POSSIBLE_DAMAGE,
-      ExecutionTag.POSSIBLY_MALICIOUS);
-  }
+    private static final String[] COMMON_DEPENDENCIES = {
+            "xxxxxxxxxxxxxxxxxxxxxxx",
+            "xxxxxxxxxxxxxxxxxxxxxxx"
+    };
 
-  @Override
-  public boolean execute(Map<String, Clazz> classes, boolean verbose) {
-    this.verbose = verbose;
-    this.references = 0;
-    this.encryptedReferences = 0;
-    this.strings = 0;
-    this.encryptedStrings = 0;
-    this.classes = classes;
-//    final List<ClassNode> classNodes = classes.values().stream().map(c -> c.node).collect(Collectors.toList());
-    Collection<Clazz> values = classes.values();
-//    values.forEach(this::fixInterface);
-    logger.info("Decrypting references...");
-//    String s = "constantpool/";
-    values.stream()
-//      .filter(this::hasDESEncryption)
-//      .filter(clazz -> clazz.node.name.contains(s))
-      .forEach(this::decryptReferences);
-//    logger.info("Decrypting strings...");
-//    values.stream()
-////      .filter(clazz -> clazz.node.name.endsWith(s))
-//      .forEach(this::decryptStrings);
-    int stringDecryptionRate = Math.round((this.strings / (float) this.encryptedStrings) * 100);
-    int referenceDecryptionRate = Math.round((this.references / (float) this.encryptedReferences) * 100);
-    logger.info("Decrypted {} strings ({}%) and {} references ({}%) successfully.",
-      strings, stringDecryptionRate, references, referenceDecryptionRate);
-    return references > 0 || strings > 0;
-  }
+    private boolean verboseMode;
+    private int decryptedStringsCount;
+    private int encryptedStringsCount;
+    private int decryptedReferencesCount;
+    private int encryptedReferencesCount;
+    private Map<String, Clazz> classMap;
 
-//  private void decryptStrings(Clazz clazz) {
-//    ClassNode classNode = clazz.node;
-//    for (MethodNode methodNode : classNode.methods) {
-//      InsnList instructions = methodNode.instructions;
-//      Set<InvokeDynamicInsnNode> nodes = this.getInvokeDynamicInstructions(
-//        methodNode, node -> node.getPrevious() != null
-//      );
-//      if (nodes.isEmpty()) {
-//        logger.debug("Skipping method {} without obfuscated strings...", referenceString(classNode, methodNode));
-//        continue;
-//      }
-//      encryptedStrings += nodes.size();
-//      long key = 0;
-//      for (InvokeDynamicInsnNode node : nodes) {
-//        Handle bsm = node.bsm;
-//        try {
-//          if (key == 0) {
-//            key = this.getFieldKey(classNode, node, instructions);
-//          }
-//          if (key == -1) {
-//            logger.warning("Failed to get key in {}", referenceString(classNode, methodNode));
-//            break;
-//          }
-//          Class<?> aClass = this.vm.loadClass(bsm.getOwner().replace("/", "."));
-//          Method stringDecryptionMethod = Arrays.stream(aClass.getDeclaredMethods())
-//            .filter(method -> method.getParameterCount() == 2)
-//            .filter(method -> Arrays.equals(method.getParameterTypes(), new Class[]{int.class, long.class})
-//              || Arrays.equals(method.getParameterTypes(), new Class[]{long.class, long.class}))
-//            .findFirst()
-//            .orElse(null);
-//          if (stringDecryptionMethod == null) {
-//            logger.warning("String decryption method in class {} is null?!", classNode.name);
-//            break;
-//          }
-//          stringDecryptionMethod.setAccessible(true);
-//          IntInsnNode sipush = (IntInsnNode) this.findFirstInstruction(node, SIPUSH);
-//          if (sipush == null) {
-//            logger.warning("Unable to find first key in {}", referenceString(classNode, methodNode));
-//            continue;
-//          }
-//          LdcInsnNode ldcInsnNode = (LdcInsnNode) sipush.getNext();
-//          long anotherNumber = (long) ldcInsnNode.cst;
-//
-//          int first = sipush.operand;
-//          long second = anotherNumber ^ key;
-//          String decryptedString = (String) stringDecryptionMethod.invoke(null, first, second);
-//          instructions.insertBefore(node, new InsnNode(POP2));
-//          instructions.insertBefore(node, new InsnNode(POP));
-//          instructions.set(node, new LdcInsnNode(decryptedString));
-//          strings++;
-//        } catch (IncompatibleClassChangeError ignored) {
-//        } catch (ExceptionInInitializerError | NoClassDefFoundError error) {
-//          if (verbose)
-//            logger.error("Error", error);
-//          logger.error("An exception was thrown while initializing class {}", error, classNode.name);
-//        } catch (Exception e) {
-//          e.printStackTrace();
-//        }
-//      }
-//    }
-//  }
-
-  private void decryptReferences(Clazz clazz) {
-    logger.collectErrors(clazz);
-    ClassNode classNode = clazz.node;
-    logger.info("Decrypting references in class {}...", classNode.name);
-    MethodNode clinit = super.getStaticInitializer(classNode);
-    if (clinit != null) {
-      BiPredicate<String, String> predicate = (owner, desc) -> !owner.equals(classNode.name)
-        && !owner.matches("javax?/(lang|util|crypto)/.*")
-        && !desc.matches("\\[?Ljava/lang/String;|J")
-        && !desc.matches("\\(JJLjava/lang/Object;\\)L.+;")
-        && !desc.equals("(J)J")
-        && !desc.matches(ZKM_REFERENCE_DESC_REGEX);
-      Instructions.isolateCallsThatMatch(clinit, predicate, predicate);
+    public DESObfuscationZKM()
+    {
+        super(ExecutionCategory.ZKM, "ZKM DES Deobfuscator",
+                "Deobfuscates string / access obfuscation with DES cipher." +
+                        "<br>XinXinFucker",
+                ExecutionTag.POSSIBLE_DAMAGE,
+                ExecutionTag.POSSIBLY_MALICIOUS);
     }
-    if (clinit == null)
-      return;
-    ClassNode proxyNode = this.getProxy(classNode, clinit);
-    if (proxyNode == null)
-      return;
-    Map<String, String> singleMap = Collections.singletonMap(classNode.name, proxyNode.name);
-    proxyNode.methods.stream()
-      .map(m -> m.instructions.toArray())
-      .flatMap(Arrays::stream)
-      .forEach(ain -> References.remapClassRefs(singleMap, ain));
-    proxyNode.fields.forEach(fieldNode -> References.remapFieldType(singleMap, fieldNode));
 
-    VM vm = VM.constructVM(this);
-    try {
-      this.invokeVM(classNode, proxyNode, vm);
-    } catch (InvocationTargetException e) {
-      Throwable cause = e.getCause();
-      if (cause instanceof BadPaddingException) {
-//        logger.warning("Skipping class {} because the key could not be calculated correctly...",
-//          referenceString(classNode, null));
-//        return;
-      }
-      e.printStackTrace();
-//      else if (e.getCause() instanceof RuntimeException && e.getCause().getMessage().contains("NoSuchMethodException")) {
-//
-//      }
-    } catch (Throwable e) {
-      logger.error("Failed to invoke proxy in {}, {}", referenceString(classNode, null), shortStacktrace(e));
-      e.printStackTrace();
-      return;
-    }
-    for (MethodNode methodNode : classNode.methods) {
-      if (methodNode.name.equals("clinitProxy"))
-        methodNode.name = "<clinit>";
-//      if (!methodNode.name.equals("<clinit>"))
-//        continue;
-      Set<InvokeDynamicInsnNode> nodes = this.invokeDynamicsWithoutStrings(methodNode);
-      if (nodes.isEmpty()) {
-        logger.debug("Skipping method {} without obfuscated references...", methodNode.name);
-        continue;
-      }
-      InsnList instructions = methodNode.instructions;
-      InstructionModifier modifier = new InstructionModifier();
-      encryptedReferences += nodes.size();
-      Frame<ConstantValue>[] frames = getConstantFrames(classNode, methodNode, this);
-      long key = 0;
-      nodes:
-      for (InvokeDynamicInsnNode node : nodes) {
-        Handle bsm = node.bsm;
-        try {
-          if (key == 0) {
-            key = this.getFieldKey(proxyNode, node, instructions, vm);
-          }
-          if (key == -1) {
-            logger.warning("Failed to get key in {}", referenceString(classNode, methodNode));
-            break;
-          }
-          Class<?> bootstrapClass = vm.loadClass(bsm.getOwner().replace("/", "."));
-          Method bootstrapMethod = Arrays.stream(bootstrapClass.getDeclaredMethods())
-            .filter(method -> Type.getMethodDescriptor(method)
-              .matches(ZKM_INVOKEDYNAMIC_REAL_BOOTSTRAP_DESC_REGEX))
-            .findFirst()
-            .orElse(null);
-          if (bootstrapMethod == null) {
-            logger.error("Failed to find bootstrap method to get method handle.");
-            break;
-          }
-          bootstrapMethod.setAccessible(true);
+    @Override
+    public boolean execute(Map<String, Clazz> classes, boolean verbose)
+    {
+        this.verboseMode = verbose;
+        this.decryptedReferencesCount = 0;
+        this.encryptedReferencesCount = 0;
+        this.decryptedStringsCount = 0;
+        this.encryptedStringsCount = 0;
+        this.classMap = classes;
 
-          List<Object> args = new ArrayList<>(Arrays.asList(
-            DynamicReflection.getTrustedLookup(), null, node.name,
-            MethodType.fromMethodDescriptorString(node.desc, vm)
-          ));
+        logger.info("Starting ZKM DES universal deobfuscation...");
 
-          Frame<ConstantValue> frame = frames[instructions.indexOf(node)];
-          int parameterCount = Type.getArgumentTypes(Type.getMethodDescriptor(bootstrapMethod)).length - 4;
-          for (int i = 0; i < parameterCount - 1; i++) {
-            ConstantValue constantValue = frame.getStack(frame.getStackSize() - parameterCount + i);
-            if (!constantValue.isKnown()) {
-              logger.warning("Stack value depth {} is unknown in {}, could be decryption class itself", i,
-                referenceString(classNode, null));
-              break nodes;
+        logger.info("Phase 1: Decrypting references...");
+        List<Clazz> classList = new ArrayList<>(classes.values());
+        int totalClassCount = classList.size();
+        int processedClassCount = 0;
+
+        for (Clazz clazz : classList)
+        {
+            processedClassCount++;
+            if (verboseMode)
+            {
+                logger.info("Processing class {}/{}: {}", processedClassCount, totalClassCount, clazz.node.name);
             }
-            Object value = constantValue.getValue();
-            args.add(value);
-          }
-          args.add(key);
-
-          MethodHandle methodHandle;
-          try {
-            methodHandle = (MethodHandle) bootstrapMethod.invoke(null, args.toArray());
-          } catch (InvocationTargetException e) {
-            Throwable cause = e.getCause();
-            if (verbose)
-              logger.error("Exception", e);
-            if (cause instanceof ArrayIndexOutOfBoundsException) {
-              logger.warning("Something went wrong while invoking a bootstrap method", shortStacktrace(cause));
-              return;
-            }
-            logger.error("Failed to get MethodHandle in {}, {}", referenceString(classNode, methodNode),
-              shortStacktrace(cause));
-//            e.printStackTrace();
-            continue;
-          }
-          MethodHandleInfo methodHandleInfo = DynamicReflection.revealMethodInfo(methodHandle);
-          AbstractInsnNode instruction = DynamicReflection.getInstructionFromHandleInfo(methodHandleInfo);
-
-//          Type[] decryptionTypes = Type.getArgumentTypes(methodHandle.type().toMethodDescriptorString());
-//          Type[] realTypes = Type.getArgumentTypes(methodHandleInfo.getMethodType().toMethodDescriptorString());
-//          int extraArgs = decryptionTypes.length - realTypes.length; // difference equals extra count
-//          if (instruction.getOpcode() != INVOKESTATIC && instruction.getOpcode() != GETSTATIC
-//            && instruction.getOpcode() != PUTSTATIC) {
-//            // object reference is an argument on the handle, we do not want to pop it
-//            extraArgs--;
-//          }
-//          for (int i = 0; i < extraArgs; i++) {
-//            Type t = decryptionTypes[decryptionTypes.length - 1 - i];
-//            instructions.insertBefore(node, new InsnNode(t.getSize() > 1 ? POP2 : POP));
-//            // pop off remaining decryption values
-//          }
-//          instructions.insertBefore(node, new InsnNode(POP2));
-//          instructions.insertBefore(node, new InsnNode(POP2));
-//          instructions.set(node, instruction);
-          modifier.replace(node, new InsnNode(POP2), new InsnNode(POP2), instruction);
-
-          references++;
-        } catch (IncompatibleClassChangeError ignored) {
-        } catch (ExceptionInInitializerError | NoClassDefFoundError error) {
-          if (verbose)
-            logger.error("Error", error);
-          logger.error("An exception was thrown while initializing class {}", error, classNode.name);
-          error.printStackTrace();
-        } catch (Exception e) {
-          e.printStackTrace();
+            decryptReferences(clazz);
         }
-      }
-      modifier.apply(methodNode);
+
+        logger.info("Phase 2: Decrypting strings...");
+        processedClassCount = 0;
+        for (Clazz clazz : classList)
+        {
+            processedClassCount++;
+            if (verboseMode)
+            {
+                logger.info("Processing class {}/{}: {}", processedClassCount, totalClassCount, clazz.node.name);
+            }
+            decryptStrings(clazz);
+        }
+
+        int stringSuccessRate = encryptedStringsCount > 0 ? Math.round((this.decryptedStringsCount / (float) this.encryptedStringsCount) * 100) : 0;
+        int referenceSuccessRate = encryptedReferencesCount > 0 ? Math.round((this.decryptedReferencesCount / (float) this.encryptedReferencesCount) * 100) : 0;
+
+        logger.info("DECRYPTION COMPLETE");
+        logger.info("Strings: {}/{} ({}% success)", decryptedStringsCount, encryptedStringsCount, stringSuccessRate);
+        logger.info("References: {}/{} ({}% success)", decryptedReferencesCount, encryptedReferencesCount, referenceSuccessRate);
+        logger.info("Total success rate: {}%", Math.round(((decryptedStringsCount + decryptedReferencesCount) / (float) (encryptedStringsCount + encryptedReferencesCount)) * 100));
+
+        return decryptedReferencesCount > 0 || decryptedStringsCount > 0;
     }
-  }
 
-  private void invokeVM(ClassNode classNode, ClassNode proxyNode, VM vm) throws Exception {
-//    vm.explicitlyPreload(proxyNode, true);
-    Class<?> clazz = vm.loadClass(classNode.name.replace("/", "."));
-    try {
-      clazz.getMethod("clinitProxy").invoke(null);
-    } catch (InvocationTargetException e) {
-      if (!(e.getCause() instanceof NullPointerException)) {
-        throw e;
-      } else {
-        logger.info("NPE in " + classNode.name);
-      }
+    private void decryptStrings(Clazz clazz)
+    {
+        ClassNode classNode = clazz.node;
+        logger.info("Starting string decryption for class: {}", classNode.name);
+
+        int classStringSuccessCount = 0;
+        int classStringTotalCount = 0;
+        int classStringFailCount = 0;
+
+        for (MethodNode methodNode : classNode.methods)
+        {
+            InsnList instructions = methodNode.instructions;
+            Set<InvokeDynamicInsnNode> stringNodes = getInvokeDynamicInstructions(
+                    methodNode, node -> node.desc.matches(ZKM_STRING_INVOKEDYNAMIC_DESC)
+            );
+
+            if (stringNodes.isEmpty())
+            {
+                continue;
+            }
+
+            if (verboseMode)
+            {
+                logger.debug("Found {} encrypted strings in {}.{}", stringNodes.size(), classNode.name, methodNode.name);
+            }
+            
+            classStringTotalCount += stringNodes.size();
+            InstructionModifier modifier = new InstructionModifier();
+
+            for (InvokeDynamicInsnNode node : stringNodes)
+            {
+                boolean success = false;
+                String decryptedString = null;
+
+                try
+                {
+                    VM vm = createEnhancedVM();
+                    long keyValue = getStringFieldKey(classNode, node, instructions, vm);
+
+                    if (keyValue == -1)
+                    {
+                        logger.warning("Key extraction failed for string in {}.{}", classNode.name, methodNode.name);
+                        classStringFailCount++;
+                        continue;
+                    }
+
+                    Handle bsm = node.bsm;
+                    Class<?> bootstrapClass = vm.loadClass(bsm.getOwner().replace("/", "."));
+
+                    Method stringDecryptionMethod = findStringDecryptionMethod(bootstrapClass);
+                    if (stringDecryptionMethod == null)
+                    {
+                        logger.warning("String decryption method not found in {}", bsm.getOwner());
+                        classStringFailCount++;
+                        continue;
+                    }
+
+                    stringDecryptionMethod.setAccessible(true);
+
+                    StringDecryptionParams params = extractStringDecryptionParams(node);
+                    if (params.firstParameter == null || params.secondParameter == null)
+                    {
+                        logger.warning("Could not find string decryption parameters in {}.{}", classNode.name, methodNode.name);
+                        classStringFailCount++;
+                        continue;
+                    }
+
+                    long finalSecondParam = params.secondParameter ^ keyValue;
+                    decryptedString = invokeStringDecryption(stringDecryptionMethod, params.firstParameter, finalSecondParam);
+
+                    if (decryptedString != null)
+                    {
+                        replaceStringDecryption(node, modifier, decryptedString);
+                        classStringSuccessCount++;
+                        decryptedStringsCount++;
+                        success = true;
+                        logger.info("STRING DECRYPTION SUCCESS: {}.{} -> '{}'", 
+                                classNode.name, methodNode.name, 
+                                truncateString(decryptedString, 100));
+                    }
+                    else
+                    {
+                        classStringFailCount++;
+                        logger.warning("STRING DECRYPTION FAILED: {}.{} - Decryption returned null", 
+                                classNode.name, methodNode.name);
+                    }
+
+                }
+                catch (Exception e)
+                {
+                    classStringFailCount++;
+                    logger.warning("STRING DECRYPTION ERROR: {}.{} - {}", 
+                            classNode.name, methodNode.name, e.getMessage());
+                    if (verboseMode)
+                    {
+                        logger.debug("Detailed error:", e);
+                    }
+                }
+            }
+
+            modifier.apply(methodNode);
+            
+            if (!stringNodes.isEmpty())
+            {
+                int methodSuccess = stringNodes.size() - classStringFailCount;
+                logger.info("Method {}.{} string summary: {}/{} decrypted", 
+                        classNode.name, methodNode.name, methodSuccess, stringNodes.size());
+            }
+        }
+
+        if (classStringTotalCount > 0)
+        {
+            int successRate = Math.round((classStringSuccessCount / (float) classStringTotalCount) * 100);
+            logger.info("Class {} string summary: {}/{} successful ({}%)", 
+                    classNode.name, classStringSuccessCount, classStringTotalCount, successRate);
+        }
+        else
+        {
+            logger.info("Class {}: No encrypted strings found", classNode.name);
+        }
+
+        encryptedStringsCount += classStringTotalCount;
     }
-  }
 
-  private ClassNode getProxy(ClassNode classNode, MethodNode clinit) {
-    if (clinit == null)
-      return null;
-    ClassNode proxyClass = Sandbox.createClassProxy(classNode.name);
-    if (Access.isEnum(classNode.access)) {
-      proxyClass.access |= ACC_ENUM | ACC_FINAL;
-      proxyClass.superName = "java/lang/Enum";
+    private Method findStringDecryptionMethod(Class<?> bootstrapClass)
+    {
+        return Arrays.stream(bootstrapClass.getDeclaredMethods())
+                .filter(method -> method.getParameterCount() == 2)
+                .filter(method ->
+                {
+                    Class<?>[] paramTypes = method.getParameterTypes();
+                    return (paramTypes[0] == int.class && paramTypes[1] == long.class) ||
+                            (paramTypes[0] == long.class && paramTypes[1] == long.class);
+                })
+                .findFirst()
+                .orElse(null);
     }
-    if ((classNode.access & ACC_SUPER) != 0) {
-      proxyClass.access |= ACC_SUPER;
+
+    private static class StringDecryptionParams
+    {
+        Integer firstParameter;
+        Long secondParameter;
     }
-    if (!classNode.superName.equals("java/lang/Object")) {
-      proxyClass.superName = classNode.superName;
+
+    private StringDecryptionParams extractStringDecryptionParams(InvokeDynamicInsnNode node)
+    {
+        StringDecryptionParams params = new StringDecryptionParams();
+        AbstractInsnNode current = node.getPrevious();
+
+        for (int i = 0; i < 5 && current != null; i++, current = current.getPrevious())
+        {
+            if (current.getOpcode() == SIPUSH || current.getOpcode() == BIPUSH)
+            {
+                params.firstParameter = (int) ((IntInsnNode) current).operand;
+            }
+            else if (current.getOpcode() == LDC && ((LdcInsnNode) current).cst instanceof Long)
+            {
+                params.secondParameter = (Long) ((LdcInsnNode) current).cst;
+            }
+
+            if (params.firstParameter != null && params.secondParameter != null)
+            {
+                break;
+            }
+        }
+
+        return params;
     }
-//    Instructions.isolateCallsThatMatch(clinit,
-//      (owner, desc) -> !owner.equals(classNode.name) && !owner.matches("javax?/(lang|crypto)/.*"),
-//      (owner, desc) -> !owner.equals(classNode.name) && !owner.matches("javax?/(lang|crypto)/.*")
-//        || !desc.matches("\\[?Ljava/lang/String;")
-//    );
 
-    List<MethodNode> methods = classNode.methods;
-    int clinitIndex = methods.indexOf(clinit);
-    Set<MethodNode> copiedMethods = new HashSet<>(methods.subList(clinitIndex + 1, methods.size()));
-
-    Set<MethodNode> methodInvocations = Arrays.stream(clinit.instructions.toArray())
-      .filter(node -> node instanceof MethodInsnNode)
-      .map(node -> (MethodInsnNode) node)
-      .filter(node -> node.owner.equals(classNode.name))
-      .flatMap(node -> classNode.methods.stream()
-        .filter(methodNode -> methodNode.name.equals(node.name) && methodNode.desc.equals(node.desc)))
-      .collect(Collectors.toSet());
-
-    Set<MethodNode> proxyMethods = new HashSet<>();
-    proxyMethods.addAll(copiedMethods);
-    proxyMethods.addAll(methodInvocations);
-    proxyClass.methods.addAll(proxyMethods);
-    clinit.name = "clinitProxy";
-    proxyClass.methods.add(clinit);
-
-//    Set<FieldNode> fieldNodes;
-//    if (Access.isEnum(classNode.access)) {
-//      fieldNodes = new HashSet<>(classNode.fields);
-//    } else {
-//      fieldNodes = classNode.fields.stream()
-//        .filter(it -> Access.isStatic(it.access))
-//        .filter(it -> it.desc.equals("J") || it.desc.equals("Ljava/util/Map;")
-//          || it.desc.matches("\\[?Ljava/lang/String;"))
-//        .collect(Collectors.toSet());
-//    }
-//    if (fieldNodes.isEmpty())
-//      return null;
-//    proxyClass.fields.addAll(fieldNodes);
-    proxyClass.fields.addAll(classNode.fields);
-    return proxyClass;
-  }
-
-  private void fixInterface(Clazz clazz) {
-    ClassNode classNode = clazz.node;
-    if (!Access.isInterface(classNode.access)) {
-      return;
+    private String invokeStringDecryption(Method stringDecryptionMethod, Integer firstParam, long secondParam)
+    {
+        try
+        {
+            if (stringDecryptionMethod.getParameterTypes()[0] == int.class)
+            {
+                return (String) stringDecryptionMethod.invoke(null, firstParam, secondParam);
+            }
+            else
+            {
+                return (String) stringDecryptionMethod.invoke(null, (long) firstParam, secondParam);
+            }
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
     }
-    MethodNode clinit = this.getStaticInitializer(classNode);
-    if (clinit == null || !this.hasDESEncryption(clazz)) {
-      return;
+
+    private void replaceStringDecryption(InvokeDynamicInsnNode node, InstructionModifier modifier, String decryptedString)
+    {
+        AbstractInsnNode current = node.getPrevious();
+        for (int i = 0; i < 2 && current != null; i++)
+        {
+            AbstractInsnNode prev = current.getPrevious();
+            if (current.getOpcode() == SIPUSH || current.getOpcode() == BIPUSH || 
+                (current.getOpcode() == LDC && ((LdcInsnNode) current).cst instanceof Long))
+            {
+                modifier.remove(current);
+            }
+            current = prev;
+        }
+
+        modifier.replace(node, new LdcInsnNode(decryptedString));
     }
-//    classNode.access &= ~ACC_INTERFACE;
-    classNode.methods.clear();
-  }
 
-  private long getFieldKey(
-    ClassNode classNode,
-    InvokeDynamicInsnNode node,
-    InsnList instructions,
-    VM vm
-  ) throws Exception {
-    VarInsnNode varInsnNode;
-    AbstractInsnNode previous = node.getPrevious();
-    if (previous instanceof VarInsnNode) {
-      varInsnNode = (VarInsnNode) previous;
-    } else if (previous.getPrevious() instanceof VarInsnNode) {
-      varInsnNode = (VarInsnNode) previous.getPrevious();
-    } else {
-      return -1;
+    private void decryptReferences(Clazz clazz)
+    {
+        logger.collectErrors(clazz);
+        ClassNode classNode = clazz.node;
+        logger.info("Starting reference decryption for class: {}", classNode.name);
+
+        MethodNode clinit = super.getStaticInitializer(classNode);
+        if (clinit != null)
+        {
+            BiPredicate<String, String> predicate = (owner, desc) -> !owner.equals(classNode.name)
+                && !owner.matches("javax?/(lang|util|crypto)/.*")
+                && !desc.matches("\\[?Ljava/lang/String;|J")
+                && !desc.matches("\\(JJLjava/lang/Object;\\)L.+;")
+                && !desc.equals("(J)J")
+                && !desc.matches(ZKM_REFERENCE_DESC_REGEX);
+            Instructions.isolateCallsThatMatch(clinit, predicate, predicate);
+        }
+        
+        if (clinit == null)
+        {
+            logger.info("Skipping class {} - no static initializer found", classNode.name);
+            return;
+        }
+            
+        ClassNode proxyNode = createEnhancedProxy(classNode, clinit);
+        if (proxyNode == null)
+        {
+            logger.warning("Failed to create proxy for {}", classNode.name);
+            return;
+        }
+
+        Map<String, String> singleMap = Collections.singletonMap(classNode.name, proxyNode.name);
+        proxyNode.methods.stream()
+                .map(m -> m.instructions.toArray())
+                .flatMap(Arrays::stream)
+                .forEach(ain -> References.remapClassRefs(singleMap, ain));
+        proxyNode.fields.forEach(fieldNode -> References.remapFieldType(singleMap, fieldNode));
+
+        VM vm = createEnhancedVM();
+        if (!initializeProxy(classNode, proxyNode, vm))
+        {
+            logger.warning("Failed to initialize proxy for {}", classNode.name);
+            return;
+        }
+
+        int classReferenceSuccessCount = 0;
+        int classReferenceTotalCount = 0;
+        int classReferenceFailCount = 0;
+
+        for (MethodNode methodNode : classNode.methods)
+        {
+            if (methodNode.name.equals("clinitProxy"))
+            {
+                methodNode.name = "<clinit>";
+            }
+
+            Set<InvokeDynamicInsnNode> referenceNodes = invokeDynamicsWithoutStrings(methodNode);
+            if (referenceNodes.isEmpty())
+            {
+                continue;
+            }
+
+            if (verboseMode)
+            {
+                logger.debug("Found {} encrypted references in {}.{}", referenceNodes.size(), classNode.name, methodNode.name);
+            }
+            
+            classReferenceTotalCount += referenceNodes.size();
+            InsnList instructions = methodNode.instructions;
+            InstructionModifier modifier = new InstructionModifier();
+            Frame<ConstantValue>[] frames = getConstantFrames(classNode, methodNode, this);
+            long keyValue = 0;
+
+            for (InvokeDynamicInsnNode node : referenceNodes)
+            {
+                boolean success = false;
+                String referenceInfo = null;
+
+                try
+                {
+                    if (keyValue == 0)
+                    {
+                        keyValue = getFieldKey(proxyNode, node, instructions, vm);
+                    }
+                    if (keyValue == -1)
+                    {
+                        logger.warning("Key extraction failed for {}.{}", classNode.name, methodNode.name);
+                        classReferenceFailCount++;
+                        continue;
+                    }
+
+                    Handle bsm = node.bsm;
+                    Class<?> bootstrapClass = vm.loadClass(bsm.getOwner().replace("/", "."));
+                    Method bootstrapMethod = findBootstrapMethod(bootstrapClass);
+
+                    if (bootstrapMethod == null)
+                    {
+                        logger.warning("Bootstrap method not found in {}", bsm.getOwner());
+                        classReferenceFailCount++;
+                        continue;
+                    }
+
+                    bootstrapMethod.setAccessible(true);
+
+                    int nodeIndex = instructions.indexOf(node);
+                    if (nodeIndex < 0 || nodeIndex >= frames.length)
+                    {
+                        logger.warning("Frame index out of bounds for {}.{}", classNode.name, methodNode.name);
+                        classReferenceFailCount++;
+                        continue;
+                    }
+                    
+                    Frame<ConstantValue> frame = frames[nodeIndex];
+                    
+                    List<Object> argsList = new ArrayList<>(Arrays.asList(
+                        DynamicReflection.getTrustedLookup(), null, node.name,
+                        MethodType.fromMethodDescriptorString(node.desc, vm)
+                    ));
+
+                    int parameterCount = Type.getArgumentTypes(Type.getMethodDescriptor(bootstrapMethod)).length - 4;
+                    for (int i = 0; i < parameterCount - 1; i++)
+                    {
+                        ConstantValue constantValue = frame.getStack(frame.getStackSize() - parameterCount + i);
+                        if (!constantValue.isKnown())
+                        {
+                            logger.warning("Unknown stack value at depth {} in {}.{}", i, classNode.name, methodNode.name);
+                            throw new IllegalStateException("Unknown stack value at depth " + i);
+                        }
+                        argsList.add(constantValue.getValue());
+                    }
+                    argsList.add(keyValue);
+
+                    MethodHandle methodHandle;
+                    try
+                    {
+                        methodHandle = (MethodHandle) bootstrapMethod.invoke(null, argsList.toArray());
+                    }
+                    catch (InvocationTargetException e)
+                    {
+                        Throwable cause = e.getCause();
+                        if (verboseMode)
+                        {
+                            logger.error("Exception during bootstrap invocation", e);
+                        }
+                        if (cause instanceof ArrayIndexOutOfBoundsException)
+                        {
+                            logger.warning("Array index issue in bootstrap method for {}.{}", classNode.name, methodNode.name);
+                            classReferenceFailCount++;
+                            continue;
+                        }
+                        logger.warning("Failed to get MethodHandle in {}.{}: {}", classNode.name, methodNode.name, shortStacktrace(cause));
+                        classReferenceFailCount++;
+                        continue;
+                    }
+                    
+                    MethodHandleInfo methodHandleInfo = DynamicReflection.revealMethodInfo(methodHandle);
+                    AbstractInsnNode instruction = DynamicReflection.getInstructionFromHandleInfo(methodHandleInfo);
+
+                    if (instruction == null)
+                    {
+                        logger.warning("No instruction generated for {}.{}", classNode.name, methodNode.name);
+                        classReferenceFailCount++;
+                        continue;
+                    }
+
+                    modifier.replace(node, new InsnNode(POP2), new InsnNode(POP2), instruction);
+                    classReferenceSuccessCount++;
+                    decryptedReferencesCount++;
+                    success = true;
+
+                    referenceInfo = String.format("%s.%s%s", 
+                            methodHandleInfo.getDeclaringClass().getName(),
+                            methodHandleInfo.getName(),
+                            methodHandleInfo.getMethodType());
+
+                    logger.info("REFERENCE DECRYPTION SUCCESS: {}.{} -> {}", classNode.name, methodNode.name, referenceInfo);
+
+                }
+                catch (IncompatibleClassChangeError ignored)
+                {
+                    classReferenceFailCount++;
+                    logger.warning("Incompatible class change in {}.{}", classNode.name, methodNode.name);
+                }
+                catch (ExceptionInInitializerError | NoClassDefFoundError error)
+                {
+                    classReferenceFailCount++;
+                    if (verboseMode)
+                    {
+                        logger.error("Error during class initialization", error);
+                    }
+                    logger.error("Class initialization failed for {}: {}", classNode.name, error.getMessage());
+                }
+                catch (Exception e)
+                {
+                    classReferenceFailCount++;
+                    logger.warning("REFERENCE DECRYPTION ERROR: {}.{} - {}", 
+                            classNode.name, methodNode.name, e.getMessage());
+                    if (verboseMode)
+                    {
+                        logger.debug("Detailed error:", e);
+                    }
+                }
+            }
+
+            modifier.apply(methodNode);
+            
+            if (!referenceNodes.isEmpty())
+            {
+                int methodSuccess = referenceNodes.size() - classReferenceFailCount;
+                logger.info("Method {}.{} reference summary: {}/{} decrypted", 
+                        classNode.name, methodNode.name, methodSuccess, referenceNodes.size());
+            }
+        }
+
+        if (classReferenceTotalCount > 0)
+        {
+            int successRate = Math.round((classReferenceSuccessCount / (float) classReferenceTotalCount) * 100);
+            logger.info("Class {} reference summary: {}/{} successful ({}%)", 
+                    classNode.name, classReferenceSuccessCount, classReferenceTotalCount, successRate);
+        }
+        else
+        {
+            logger.info("Class {}: No encrypted references found", classNode.name);
+        }
+
+        encryptedReferencesCount += classReferenceTotalCount;
     }
-    int variableIndex = varInsnNode.var;
-    long secondKey = this.searchForSecondKey(variableIndex, instructions);
-    if (secondKey == -1)
-      return -1;
-    Class<?> clazz = vm.loadClass(classNode.name.replace("/", "."));
-    if (clazz == null)
-      throw new IllegalStateException("Could not find or load class " + classNode.name);
-    Field field = this.findField(clazz, classNode);
-    if (field == null) {
-      return -1;
+
+    private Method findBootstrapMethod(Class<?> bootstrapClass)
+    {
+        return Arrays.stream(bootstrapClass.getDeclaredMethods())
+                .filter(method -> Type.getMethodDescriptor(method).matches(ZKM_INVOKEDYNAMIC_REAL_BOOTSTRAP_DESC_REGEX))
+                .findFirst()
+                .orElse(null);
     }
-    field.setAccessible(true);
-    long key = (Long) field.get(null);
-    return key ^ secondKey;
-  }
 
-  private Field findField(Class<?> clazz, ClassNode classNode) throws NoSuchFieldException {
-    MethodNode clinit = super.getMethod(classNode, "clinitProxy", "()V");
-    if (clinit == null)
-      return null;
-    FieldInsnNode fieldInsnNode = this.findFirstFieldInstruction(clinit);
-    if (fieldInsnNode == null)
-      return null;
-    return clazz.getDeclaredField(fieldInsnNode.name);
-  }
-
-  private FieldInsnNode findFirstFieldInstruction(MethodNode clinit) {
-    for (AbstractInsnNode node : clinit.instructions) {
-      if (node.getOpcode() != PUTSTATIC)
-        continue;
-      FieldInsnNode fieldInsnNode = (FieldInsnNode) node;
-      if (!fieldInsnNode.desc.equals("J"))
-        break;
-      return fieldInsnNode;
+    private VM createEnhancedVM()
+    {
+        try
+        {
+            VM vm = VM.constructVMWithContextLoader(this);
+            //vm.preloadDependencies(COMMON_DEPENDENCIES);
+            return vm;
+        }
+        catch (Exception e)
+        {
+            logger.warning("Enhanced VM creation failed, using fallback: {}", e.getMessage());
+            return VM.constructVM(this);
+        }
     }
-    return null;
-  }
 
-  private AbstractInsnNode findFirstInstruction(AbstractInsnNode start, int opcode) {
-    for (; start != null; start = start.getPrevious()) {
-      if (start.getOpcode() == opcode) {
-        return start;
-      }
+    private ClassNode createEnhancedProxy(ClassNode classNode, MethodNode clinit)
+    {
+        if (clinit == null) return null;
+
+        ClassNode proxyClass = Sandbox.createClassProxy(classNode.name);
+
+        proxyClass.access = classNode.access;
+        proxyClass.superName = classNode.superName;
+        proxyClass.interfaces = new ArrayList<>(classNode.interfaces);
+        proxyClass.signature = classNode.signature;
+
+        proxyClass.fields.addAll(classNode.fields.stream()
+                .filter(f -> Access.isStatic(f.access))
+                .collect(Collectors.toList()));
+
+        Set<MethodNode> methodsToCopy = new HashSet<>();
+        
+        Arrays.stream(clinit.instructions.toArray())
+                .filter(node -> node instanceof MethodInsnNode)
+                .map(node -> (MethodInsnNode) node)
+                .filter(node -> node.owner.equals(classNode.name))
+                .forEach(node ->
+                {
+                    MethodNode original = getMethod(classNode, node.name, node.desc);
+                    if (original != null) methodsToCopy.add(original);
+                });
+
+        classNode.methods.stream()
+                .filter(m -> Access.isStatic(m.access))
+                .forEach(methodsToCopy::add);
+
+        clinit.name = "clinitProxy";
+        methodsToCopy.add(clinit);
+
+        proxyClass.methods.addAll(methodsToCopy);
+        return proxyClass;
     }
-    return null;
-  }
 
-  /*
-    getstatic <key_field>
-    ldc <second_key>
-    lxor
-    lstore <variable_index>
-   */
-  private long searchForSecondKey(int variableIndex, InsnList instructions) {
-    for (AbstractInsnNode node : instructions.toArray()) {
-      if (node.getOpcode() != LSTORE)
-        continue;
-      VarInsnNode varInsnNode = (VarInsnNode) node;
-      if (varInsnNode.var != variableIndex)
-        continue;
-      AbstractInsnNode previous = varInsnNode.getPrevious();
-      if (previous == null || previous.getPrevious() == null || !(previous.getPrevious() instanceof LdcInsnNode))
-        continue;
-      //TODO: optimize/replace with ConstantValue on the stack
-      LdcInsnNode ldcInsnNode = (LdcInsnNode) previous.getPrevious();
-      return (long) ldcInsnNode.cst;
+    private boolean initializeProxy(ClassNode classNode, ClassNode proxyNode, VM vm)
+    {
+        try
+        {
+            Class<?> clazz = vm.loadClass(classNode.name.replace("/", "."));
+            Method clinitProxy = clazz.getMethod("clinitProxy");
+            clinitProxy.invoke(null);
+            return true;
+        }
+        catch (InvocationTargetException e)
+        {
+            Throwable cause = e.getCause();
+            if (cause instanceof BadPaddingException)
+            {
+                logger.warning("Skipping class {} due to decryption key issues", classNode.name);
+                return false;
+            }
+            else if (cause instanceof NullPointerException)
+            {
+                logger.debug("NPE during proxy initialization in {} (expected)", classNode.name);
+                return true;
+            }
+            else
+            {
+                logger.warning("Proxy initialization failed for {}: {}", classNode.name, cause.getMessage());
+                return false;
+            }
+        }
+        catch (Exception e)
+        {
+            logger.warning("Failed to initialize proxy for {}: {}", classNode.name, e.getMessage());
+            return false;
+        }
     }
-    return -1;
-  }
 
-  private Set<InvokeDynamicInsnNode> invokeDynamicsWithoutStrings(MethodNode methodNode) {
-    return this.getInvokeDynamicInstructions(methodNode)
-      .stream()
-      .filter(node -> !node.desc.matches(ZKM_STRING_INVOKEDYNAMIC_DESC))
-      .collect(Collectors.toSet());
-  }
+    private long getStringFieldKey(ClassNode classNode, InvokeDynamicInsnNode node, InsnList instructions, VM vm)
+    {
+        try
+        {
+            MethodNode clinit = getStaticInitializer(classNode);
+            if (clinit != null)
+            {
+                FieldInsnNode fieldNode = findFirstFieldInstruction(clinit);
+                if (fieldNode != null)
+                {
+                    Class<?> clazz = vm.loadClass(classNode.name.replace("/", "."));
+                    Field field = clazz.getDeclaredField(fieldNode.name);
+                    field.setAccessible(true);
+                    return (Long) field.get(null);
+                }
+            }
 
-  private Set<InvokeDynamicInsnNode> getInvokeDynamicInstructions(MethodNode methodNode) {
-    return this.getInvokeDynamicInstructions(methodNode,
-      node -> node.bsm.getDesc().equals(ZKM_INVOKEDYNAMIC_HANDLE_DESC)
-    );
-  }
+            return findKeyByPattern(node, instructions);
 
-  private Set<InvokeDynamicInsnNode> getInvokeDynamicInstructions(
-    MethodNode methodNode, Predicate<InvokeDynamicInsnNode> predicate
-  ) {
-    if (predicate == null)
-      predicate = __ -> true;
-    return Arrays.stream(methodNode.instructions.toArray())
-      .filter(node -> node.getOpcode() == INVOKEDYNAMIC)
-      .map(node -> (InvokeDynamicInsnNode) node)
-      .filter(node -> node.bsm != null)
-      .filter(node -> !node.bsm.getName().equals("metafactory"))
-      .filter(predicate)
-      .collect(Collectors.toSet());
-  }
+        }
+        catch (Exception e)
+        {
+            if (verboseMode)
+            {
+                logger.debug("String key search failed: {}", e.getMessage());
+            }
+            return -1;
+        }
+    }
 
-  private boolean matchesPattern(AbstractInsnNode node) {
-    AbstractInsnNode previous = node.getPrevious();
-    return previous != null && previous.getOpcode() == LLOAD
-      && previous.getPrevious() != null && previous.getPrevious().getOpcode() == LDC;
-  }
+    private long getFieldKey(ClassNode classNode, InvokeDynamicInsnNode node, InsnList instructions, VM vm)
+    {
+        try
+        {
+            VarInsnNode varInsnNode = findKeyVariable(node, instructions);
+            if (varInsnNode != null)
+            {
+                long key = searchForSecondKey(varInsnNode.var, instructions);
+                if (key != -1) return key;
+            }
 
-  //TODO: implement better DES encryption check for classes without static initializer but obfuscation
-  private boolean hasDESEncryption(Clazz c) {
-    ClassNode cn = c.node;
-    if (Access.isInterface(cn.access))
-      return false;
-    MethodNode mn = getStaticInitializer(cn);
-    if (mn == null)
-      return false;
-    return StreamSupport.stream(mn.instructions.spliterator(), false)
-      .anyMatch(ain -> ain.getType() == AbstractInsnNode.LDC_INSN &&
-        "DES/CBC/PKCS5Padding".equals(((LdcInsnNode) ain).cst));
-  }
+            MethodNode clinit = getStaticInitializer(classNode);
+            if (clinit != null)
+            {
+                FieldInsnNode fieldNode = findFirstFieldInstruction(clinit);
+                if (fieldNode != null)
+                {
+                    Class<?> clazz = vm.loadClass(classNode.name.replace("/", "."));
+                    Field field = clazz.getDeclaredField(fieldNode.name);
+                    field.setAccessible(true);
+                    return (Long) field.get(null);
+                }
+            }
 
-  @Override
-  public String getAuthor() {
-    return "iamkyaru";
-  }
+            return findKeyByPattern(node, instructions);
 
-  @Override
-  public ClassNode tryClassLoad(String name) {
-    return this.classes.containsKey(name) ? this.classes.get(name).node : null;
-  }
+        }
+        catch (Exception e)
+        {
+            if (verboseMode)
+            {
+                logger.debug("Key search failed: {}", e.getMessage());
+            }
+            return -1;
+        }
+    }
 
-  @Override
-  public Object getFieldValueOrNull(BasicValue v, String owner, String name, String desc) {
-    return null;
-  }
+    private VarInsnNode findKeyVariable(AbstractInsnNode start, InsnList instructions)
+    {
+        for (AbstractInsnNode node = start.getPrevious(); node != null; node = node.getPrevious())
+        {
+            if (node.getOpcode() == LSTORE)
+            {
+                return (VarInsnNode) node;
+            }
+        }
+        return null;
+    }
 
-  @Override
-  public Object getMethodReturnOrNull(BasicValue v, String owner, String name, String desc, List<? extends ConstantValue> values) {
-    return null;
-  }
+    private long findKeyByPattern(AbstractInsnNode start, InsnList instructions)
+    {
+        for (AbstractInsnNode node = start.getPrevious(); node != null; node = node.getPrevious())
+        {
+            if (node.getOpcode() == LXOR)
+            {
+                AbstractInsnNode prev1 = node.getPrevious();
+                AbstractInsnNode prev2 = prev1 != null ? prev1.getPrevious() : null;
+
+                if (prev2 != null && prev2.getOpcode() == GETSTATIC &&
+                        prev1 != null && prev1.getOpcode() == LDC &&
+                        ((LdcInsnNode) prev1).cst instanceof Long)
+                {
+                    return (Long) ((LdcInsnNode) prev1).cst;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private FieldInsnNode findFirstFieldInstruction(MethodNode clinit)
+    {
+        for (AbstractInsnNode node : clinit.instructions)
+        {
+            if (node.getOpcode() != PUTSTATIC)
+                continue;
+            FieldInsnNode fieldInsnNode = (FieldInsnNode) node;
+            if (!fieldInsnNode.desc.equals("J"))
+                break;
+            return fieldInsnNode;
+        }
+        return null;
+    }
+
+    private long searchForSecondKey(int variableIndex, InsnList instructions)
+    {
+        for (AbstractInsnNode node : instructions.toArray())
+        {
+            if (node.getOpcode() != LSTORE)
+                continue;
+            VarInsnNode varInsnNode = (VarInsnNode) node;
+            if (varInsnNode.var != variableIndex)
+                continue;
+            AbstractInsnNode previous = varInsnNode.getPrevious();
+            if (previous == null || previous.getPrevious() == null || !(previous.getPrevious() instanceof LdcInsnNode))
+                continue;
+            LdcInsnNode ldcInsnNode = (LdcInsnNode) previous.getPrevious();
+            return (long) ldcInsnNode.cst;
+        }
+        return -1;
+    }
+
+    private Set<InvokeDynamicInsnNode> invokeDynamicsWithoutStrings(MethodNode methodNode)
+    {
+        return this.getInvokeDynamicInstructions(methodNode)
+                .stream()
+                .filter(node -> !node.desc.matches(ZKM_STRING_INVOKEDYNAMIC_DESC))
+                .collect(Collectors.toSet());
+    }
+
+    private Set<InvokeDynamicInsnNode> getInvokeDynamicInstructions(MethodNode methodNode)
+    {
+        return this.getInvokeDynamicInstructions(methodNode,
+                node -> node.bsm.getDesc().equals(ZKM_INVOKEDYNAMIC_HANDLE_DESC)
+        );
+    }
+
+    private Set<InvokeDynamicInsnNode> getInvokeDynamicInstructions(
+            MethodNode methodNode, Predicate<InvokeDynamicInsnNode> predicate
+    )
+    {
+        if (predicate == null)
+            predicate = __ -> true;
+        return Arrays.stream(methodNode.instructions.toArray())
+                .filter(node -> node.getOpcode() == INVOKEDYNAMIC)
+                .map(node -> (InvokeDynamicInsnNode) node)
+                .filter(node -> node.bsm != null)
+                .filter(node -> !node.bsm.getName().equals("metafactory"))
+                .filter(predicate)
+                .collect(Collectors.toSet());
+    }
+
+    private boolean hasDESEncryption(Clazz c)
+    {
+        ClassNode cn = c.node;
+        if (Access.isInterface(cn.access))
+            return false;
+        MethodNode mn = getStaticInitializer(cn);
+        if (mn == null)
+            return false;
+        return StreamSupport.stream(mn.instructions.spliterator(), false)
+                .anyMatch(ain -> ain.getType() == AbstractInsnNode.LDC_INSN &&
+                        "DES/CBC/PKCS5Padding".equals(((LdcInsnNode) ain).cst));
+    }
+
+    private String truncateString(String str, int maxLength)
+    {
+        if (str == null || str.length() <= maxLength)
+        {
+            return str;
+        }
+        return str.substring(0, maxLength - 3) + "...";
+    }
+
+    @Override
+    public String getAuthor()
+    {
+        return "XinXin_Fucker";
+    }
+
+    @Override
+    public ClassNode tryClassLoad(String name)
+    {
+        return this.classMap.containsKey(name) ? this.classMap.get(name).node : null;
+    }
+
+    @Override
+    public Object getFieldValueOrNull(BasicValue v, String owner, String name, String desc)
+    {
+        return null;
+    }
+
+    @Override
+    public Object getMethodReturnOrNull(BasicValue v, String owner, String name, String desc, List<? extends ConstantValue> values)
+    {
+        return null;
+    }
 }
