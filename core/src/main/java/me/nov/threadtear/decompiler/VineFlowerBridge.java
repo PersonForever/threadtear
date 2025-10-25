@@ -121,7 +121,7 @@ public class VineFlowerBridge implements IDecompilerBridge, IBytecodeProvider, I
 
     @Override
     public String getVersionInfo() {
-      return "1.10.1";
+      return "1.11.1";
     }
 
     @Override

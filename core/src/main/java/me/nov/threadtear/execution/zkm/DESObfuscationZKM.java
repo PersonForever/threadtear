@@ -90,7 +90,14 @@ public class DESObfuscationZKM extends Execution implements IVMReferenceHandler,
             {
                 logger.info("Processing class {}/{}: {}", processedClassCount, totalClassCount, clazz.node.name);
             }
-            decryptReferences(clazz);
+            try
+            {
+                decryptReferences(clazz);
+            }
+            catch (Exception e)
+            {
+                logger.warning("Failed to decrypt references for {}: {}", clazz.node.name, e.getMessage());
+            }
         }
 
         logger.info("Phase 2: Decrypting strings...");
@@ -102,16 +109,27 @@ public class DESObfuscationZKM extends Execution implements IVMReferenceHandler,
             {
                 logger.info("Processing class {}/{}: {}", processedClassCount, totalClassCount, clazz.node.name);
             }
-            decryptStrings(clazz);
+            try
+            {
+                decryptStrings(clazz);
+            }
+            catch (Exception e)
+            {
+                logger.warning("Failed to decrypt strings for {}: {}", clazz.node.name, e.getMessage());
+            }
         }
 
         int stringSuccessRate = encryptedStringsCount > 0 ? Math.round((this.decryptedStringsCount / (float) this.encryptedStringsCount) * 100) : 0;
         int referenceSuccessRate = encryptedReferencesCount > 0 ? Math.round((this.decryptedReferencesCount / (float) this.encryptedReferencesCount) * 100) : 0;
 
+        int totalEncrypted = encryptedStringsCount + encryptedReferencesCount;
+        int totalDecrypted = decryptedStringsCount + decryptedReferencesCount;
+        int totalSuccessRate = totalEncrypted > 0 ? Math.round((totalDecrypted / (float) totalEncrypted) * 100) : 0;
+
         logger.info("DECRYPTION COMPLETE");
         logger.info("Strings: {}/{} ({}% success)", decryptedStringsCount, encryptedStringsCount, stringSuccessRate);
         logger.info("References: {}/{} ({}% success)", decryptedReferencesCount, encryptedReferencesCount, referenceSuccessRate);
-        logger.info("Total success rate: {}%", Math.round(((decryptedStringsCount + decryptedReferencesCount) / (float) (encryptedStringsCount + encryptedReferencesCount)) * 100));
+        logger.info("Total: {}/{} ({}% success)", totalDecrypted, totalEncrypted, totalSuccessRate);
 
         return decryptedReferencesCount > 0 || decryptedStringsCount > 0;
     }
@@ -137,11 +155,6 @@ public class DESObfuscationZKM extends Execution implements IVMReferenceHandler,
                 continue;
             }
 
-            if (verboseMode)
-            {
-                logger.debug("Found {} encrypted strings in {}.{}", stringNodes.size(), classNode.name, methodNode.name);
-            }
-            
             classStringTotalCount += stringNodes.size();
             InstructionModifier modifier = new InstructionModifier();
 
@@ -186,7 +199,7 @@ public class DESObfuscationZKM extends Execution implements IVMReferenceHandler,
                     long finalSecondParam = params.secondParameter ^ keyValue;
                     decryptedString = invokeStringDecryption(stringDecryptionMethod, params.firstParameter, finalSecondParam);
 
-                    if (decryptedString != null)
+                    if (decryptedString != null && !decryptedString.isEmpty())
                     {
                         replaceStringDecryption(node, modifier, decryptedString);
                         classStringSuccessCount++;
@@ -199,10 +212,17 @@ public class DESObfuscationZKM extends Execution implements IVMReferenceHandler,
                     else
                     {
                         classStringFailCount++;
-                        logger.warning("STRING DECRYPTION FAILED: {}.{} - Decryption returned null", 
+                        logger.warning("STRING DECRYPTION FAILED: {}.{} - Decryption returned null or empty", 
                                 classNode.name, methodNode.name);
                     }
 
+                }
+                catch (ExceptionInInitializerError e)
+                {
+                    classStringFailCount++;
+                    logger.warning("STRING DECRYPTION ERROR: {}.{} - Class initialization failed: {}", 
+                            classNode.name, methodNode.name, e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
+                    continue;
                 }
                 catch (Exception e)
                 {
@@ -220,9 +240,10 @@ public class DESObfuscationZKM extends Execution implements IVMReferenceHandler,
             
             if (!stringNodes.isEmpty())
             {
-                int methodSuccess = stringNodes.size() - classStringFailCount;
+                int methodSuccess = classStringSuccessCount;
+                int methodTotal = stringNodes.size();
                 logger.info("Method {}.{} string summary: {}/{} decrypted", 
-                        classNode.name, methodNode.name, methodSuccess, stringNodes.size());
+                        classNode.name, methodNode.name, methodSuccess, methodTotal);
             }
         }
 
@@ -289,17 +310,35 @@ public class DESObfuscationZKM extends Execution implements IVMReferenceHandler,
     {
         try
         {
+            Object result;
             if (stringDecryptionMethod.getParameterTypes()[0] == int.class)
             {
-                return (String) stringDecryptionMethod.invoke(null, firstParam, secondParam);
+                result = stringDecryptionMethod.invoke(null, firstParam, secondParam);
             }
             else
             {
-                return (String) stringDecryptionMethod.invoke(null, (long) firstParam, secondParam);
+                result = stringDecryptionMethod.invoke(null, (long) firstParam, secondParam);
             }
+            
+            if (result instanceof String)
+            {
+                return (String) result;
+            }
+            return null;
+        }
+        catch (InvocationTargetException e)
+        {
+            Throwable cause = e.getCause();
+            if (cause instanceof ExceptionInInitializerError)
+            {
+                throw (ExceptionInInitializerError) cause;
+            }
+            logger.debug("String decryption invocation failed: {}", cause.getMessage());
+            return null;
         }
         catch (Exception e)
         {
+            logger.debug("String decryption method invocation failed: {}", e.getMessage());
             return null;
         }
     }
@@ -368,7 +407,6 @@ public class DESObfuscationZKM extends Execution implements IVMReferenceHandler,
 
         int classReferenceSuccessCount = 0;
         int classReferenceTotalCount = 0;
-        int classReferenceFailCount = 0;
 
         for (MethodNode methodNode : classNode.methods)
         {
@@ -393,6 +431,7 @@ public class DESObfuscationZKM extends Execution implements IVMReferenceHandler,
             InstructionModifier modifier = new InstructionModifier();
             Frame<ConstantValue>[] frames = getConstantFrames(classNode, methodNode, this);
             long keyValue = 0;
+            int methodSuccessCount = 0;
 
             for (InvokeDynamicInsnNode node : referenceNodes)
             {
@@ -408,7 +447,6 @@ public class DESObfuscationZKM extends Execution implements IVMReferenceHandler,
                     if (keyValue == -1)
                     {
                         logger.warning("Key extraction failed for {}.{}", classNode.name, methodNode.name);
-                        classReferenceFailCount++;
                         continue;
                     }
 
@@ -419,7 +457,6 @@ public class DESObfuscationZKM extends Execution implements IVMReferenceHandler,
                     if (bootstrapMethod == null)
                     {
                         logger.warning("Bootstrap method not found in {}", bsm.getOwner());
-                        classReferenceFailCount++;
                         continue;
                     }
 
@@ -429,7 +466,6 @@ public class DESObfuscationZKM extends Execution implements IVMReferenceHandler,
                     if (nodeIndex < 0 || nodeIndex >= frames.length)
                     {
                         logger.warning("Frame index out of bounds for {}.{}", classNode.name, methodNode.name);
-                        classReferenceFailCount++;
                         continue;
                     }
                     
@@ -468,11 +504,9 @@ public class DESObfuscationZKM extends Execution implements IVMReferenceHandler,
                         if (cause instanceof ArrayIndexOutOfBoundsException)
                         {
                             logger.warning("Array index issue in bootstrap method for {}.{}", classNode.name, methodNode.name);
-                            classReferenceFailCount++;
                             continue;
                         }
                         logger.warning("Failed to get MethodHandle in {}.{}: {}", classNode.name, methodNode.name, shortStacktrace(cause));
-                        classReferenceFailCount++;
                         continue;
                     }
                     
@@ -482,12 +516,12 @@ public class DESObfuscationZKM extends Execution implements IVMReferenceHandler,
                     if (instruction == null)
                     {
                         logger.warning("No instruction generated for {}.{}", classNode.name, methodNode.name);
-                        classReferenceFailCount++;
                         continue;
                     }
 
                     modifier.replace(node, new InsnNode(POP2), new InsnNode(POP2), instruction);
                     classReferenceSuccessCount++;
+                    methodSuccessCount++;
                     decryptedReferencesCount++;
                     success = true;
 
@@ -501,12 +535,10 @@ public class DESObfuscationZKM extends Execution implements IVMReferenceHandler,
                 }
                 catch (IncompatibleClassChangeError ignored)
                 {
-                    classReferenceFailCount++;
                     logger.warning("Incompatible class change in {}.{}", classNode.name, methodNode.name);
                 }
                 catch (ExceptionInInitializerError | NoClassDefFoundError error)
                 {
-                    classReferenceFailCount++;
                     if (verboseMode)
                     {
                         logger.error("Error during class initialization", error);
@@ -515,7 +547,6 @@ public class DESObfuscationZKM extends Execution implements IVMReferenceHandler,
                 }
                 catch (Exception e)
                 {
-                    classReferenceFailCount++;
                     logger.warning("REFERENCE DECRYPTION ERROR: {}.{} - {}", 
                             classNode.name, methodNode.name, e.getMessage());
                     if (verboseMode)
@@ -527,12 +558,8 @@ public class DESObfuscationZKM extends Execution implements IVMReferenceHandler,
 
             modifier.apply(methodNode);
             
-            if (!referenceNodes.isEmpty())
-            {
-                int methodSuccess = referenceNodes.size() - classReferenceFailCount;
-                logger.info("Method {}.{} reference summary: {}/{} decrypted", 
-                        classNode.name, methodNode.name, methodSuccess, referenceNodes.size());
-            }
+            logger.info("Method {}.{} reference summary: {}/{} decrypted", 
+                    classNode.name, methodNode.name, methodSuccessCount, referenceNodes.size());
         }
 
         if (classReferenceTotalCount > 0)
